@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { provisioningJobs } from "@/lib/db/schema";
+import { provisioningJobs, agentInstances, agents } from "@/lib/db/schema";
 import { eq, and, or, desc, inArray } from "drizzle-orm";
 
 // Heartbeat interval: 60 seconds (GitHub Actions posts heartbeat every 60s)
@@ -10,6 +10,12 @@ export const JOB_TIMEOUT_SECONDS = 900;
 export const MAX_RETRIES = 3;
 
 type JobStatus = "queued" | "provisioning" | "running" | "failed";
+
+export interface VMMetadata {
+  serverId: string;    // Hetzner server ID (as string from callback JSON)
+  serverIp: string;    // Public IPv4
+  tailscaleIp: string; // Tailscale network IP
+}
 
 interface EnqueueParams {
   agentId: string;
@@ -224,4 +230,73 @@ export async function getJobByAgentId(
     .limit(1);
 
   return job;
+}
+
+/**
+ * Complete provisioning with VM metadata
+ * Updates job status to "running", creates/updates agent instance, and sets agent to "active"
+ */
+export async function completeProvisioningWithMetadata(params: {
+  jobId: string;
+  metadata: VMMetadata;
+}): Promise<void> {
+  const { jobId, metadata } = params;
+
+  // 1. Get the job to find the agentId
+  const [job] = await db
+    .select()
+    .from(provisioningJobs)
+    .where(eq(provisioningJobs.id, jobId))
+    .limit(1);
+
+  if (!job) {
+    throw new Error(`Job not found: ${jobId}`);
+  }
+
+  // 2. Update job status to "running"
+  await updateJobStatus({ jobId, status: "running" });
+
+  // 3. Check if agent already has an instance (any non-stopped/non-failed instance)
+  const existing = await db.query.agentInstances.findFirst({
+    where: and(
+      eq(agentInstances.agentId, job.agentId),
+      inArray(agentInstances.status, ["pending", "provisioning", "running"])
+    ),
+  });
+
+  // 4. Update existing instance or insert new one
+  if (existing) {
+    await db
+      .update(agentInstances)
+      .set({
+        status: "running",
+        serverId: metadata.serverId,
+        serverIp: metadata.serverIp,
+        tailscaleIp: metadata.tailscaleIp,
+        region: job.region,
+        startedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(agentInstances.id, existing.id));
+  } else {
+    await db.insert(agentInstances).values({
+      agentId: job.agentId,
+      status: "running",
+      serverId: metadata.serverId,
+      serverIp: metadata.serverIp,
+      tailscaleIp: metadata.tailscaleIp,
+      region: job.region,
+      startedAt: new Date(),
+    });
+  }
+
+  // 5. Update agent status to "active"
+  await db
+    .update(agents)
+    .set({ status: "active", updatedAt: new Date() })
+    .where(eq(agents.id, job.agentId));
+
+  console.log(
+    `[Queue] Provisioning complete for job ${jobId}: server=${metadata.serverId}, ip=${metadata.serverIp}, tailscale=${metadata.tailscaleIp}`
+  );
 }
