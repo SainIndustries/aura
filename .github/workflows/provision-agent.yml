@@ -23,7 +23,7 @@ on:
 jobs:
   provision:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
 
     steps:
       - name: Checkout
@@ -37,6 +37,13 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Setup Tailscale on runner
+        uses: tailscale/github-action@v3
+        with:
+          oauth-client-id: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TAILSCALE_OAUTH_CLIENT_SECRET }}
+          tags: tag:ci
 
       - name: Send provisioning callback
         run: |
@@ -81,6 +88,44 @@ jobs:
           REGION: ${{ inputs.region }}
         run: npx tsx src/lib/provisioning/provision-vm.ts
 
+      - name: Install Ansible
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ansible
+
+      - name: Install Ansible collections
+        run: ansible-galaxy collection install -r src/ansible/requirements.yml
+
+      - name: Configure SSH key for Ansible
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.HETZNER_SSH_PRIVATE_KEY }}" > /tmp/ansible_ssh_key
+          chmod 600 /tmp/ansible_ssh_key
+
+      - name: Generate Ansible inventory
+        run: |
+          cat > /tmp/inventory.yml <<EOF
+          all:
+            hosts:
+              agent_vm:
+                ansible_host: ${{ steps.provision.outputs.tailscale_ip }}
+                ansible_user: root
+                ansible_ssh_private_key_file: /tmp/ansible_ssh_key
+                ansible_python_interpreter: /usr/bin/python3
+            vars:
+              agent_id: "${{ inputs.agent_id }}"
+              server_name: "${{ steps.provision.outputs.server_name }}"
+              server_id: "${{ steps.provision.outputs.server_id }}"
+          EOF
+
+      - name: Configure VM with Ansible
+        id: configure
+        run: |
+          ansible-playbook src/ansible/playbooks/configure-agent.yml \
+            -i /tmp/inventory.yml \
+            --ssh-common-args='-o StrictHostKeyChecking=accept-new' \
+            -vv
+
       - name: Stop heartbeat
         if: always()
         run: |
@@ -88,6 +133,12 @@ jobs:
             kill $(cat /tmp/heartbeat_pid) 2>/dev/null || true
             echo "Heartbeat loop stopped"
           fi
+
+      - name: Cleanup SSH key
+        if: always()
+        run: |
+          rm -f /tmp/ansible_ssh_key
+          rm -f /tmp/inventory.yml
 
       - name: Send success callback
         if: success()
@@ -111,11 +162,17 @@ jobs:
       - name: Send failure callback
         if: failure()
         run: |
+          FAILED_STEP="unknown"
+          if [ "${{ steps.provision.outcome }}" = "failure" ]; then
+            FAILED_STEP="provision"
+          elif [ "${{ steps.configure.outcome }}" = "failure" ]; then
+            FAILED_STEP="configure"
+          fi
           BODY=$(jq -n \
             --arg job_id "${{ inputs.job_id }}" \
             --arg status "failed" \
-            --arg error "Provisioning workflow failed" \
-            --arg failed_step "provision" \
+            --arg error "Provisioning workflow failed at $FAILED_STEP" \
+            --arg failed_step "$FAILED_STEP" \
             '{job_id: $job_id, status: $status, error: $error, failed_step: $failed_step}')
           SIGNATURE=$(echo -n "$BODY" | openssl dgst -sha256 -hmac "${{ secrets.GITHUB_CALLBACK_SECRET }}" -hex | awk '{print $NF}')
 
