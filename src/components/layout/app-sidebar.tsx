@@ -14,6 +14,12 @@ import {
   Phone,
   LogOut,
   Users,
+  User,
+  Sun,
+  Moon,
+  Home,
+  ListChecks,
+  MoreHorizontal,
 } from "lucide-react";
 import {
   Sidebar,
@@ -26,10 +32,18 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { LogoMark, LogoWordmark } from "@/components/marketing/logo";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { useTheme } from "@/components/providers/theme-provider";
 
 const CAL_LINK =
   "https://cal.com/shadman-hossain-k6kwji/15min?overlayCalendar=true";
@@ -48,6 +62,7 @@ const navItems = [
 export function AppSidebar() {
   const pathname = usePathname();
   const { user, logout } = usePrivy();
+  const { theme, toggleTheme } = useTheme();
   const email = user?.email?.address ?? "user@aura.ai";
   const initials = email.slice(0, 2).toUpperCase();
 
@@ -105,24 +120,70 @@ export function AppSidebar() {
       <Separator className="bg-[rgba(255,255,255,0.05)]" />
 
       <SidebarFooter className="p-4">
-        <div className="flex items-center gap-3">
-          <Avatar className="h-8 w-8">
-            <AvatarFallback className="bg-aura-accent/20 text-xs text-aura-accent">
-              {initials}
-            </AvatarFallback>
-          </Avatar>
-          <div className="flex-1 truncate">
-            <p className="truncate text-sm text-aura-text-white">{email}</p>
-          </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 text-aura-text-dim hover:text-aura-text-light"
-            onClick={() => logout().then(() => window.location.href = "/")}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button className="flex w-full items-center gap-3 rounded-lg p-2 text-left transition-colors hover:bg-aura-elevated focus:outline-none">
+              <Avatar className="h-8 w-8">
+                <AvatarFallback className="bg-aura-accent/20 text-xs text-aura-accent">
+                  {initials}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex-1 truncate">
+                <p className="truncate text-sm text-aura-text-white">{email}</p>
+              </div>
+              <MoreHorizontal className="h-4 w-4 text-aura-text-dim" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="end"
+            side="top"
+            className="w-56 bg-aura-surface border-aura-border"
           >
-            <LogOut className="h-4 w-4" />
-          </Button>
-        </div>
+            <DropdownMenuItem asChild>
+              <Link href="/settings" className="flex items-center gap-3 cursor-pointer">
+                <User className="h-4 w-4" />
+                <span>My profile</span>
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={toggleTheme}
+              className="flex items-center justify-between cursor-pointer"
+            >
+              <div className="flex items-center gap-3">
+                {theme === "dark" ? (
+                  <Sun className="h-4 w-4" />
+                ) : (
+                  <Moon className="h-4 w-4" />
+                )}
+                <span>Toggle theme</span>
+              </div>
+              <kbd className="ml-auto inline-flex h-5 items-center rounded border border-aura-border bg-aura-elevated px-1.5 text-[10px] font-medium text-aura-text-dim">
+                M
+              </kbd>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator className="bg-aura-border" />
+            <DropdownMenuItem asChild>
+              <Link href="/" className="flex items-center gap-3 cursor-pointer">
+                <Home className="h-4 w-4" />
+                <span>Homepage</span>
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href="/onboarding" className="flex items-center gap-3 cursor-pointer">
+                <ListChecks className="h-4 w-4" />
+                <span>Onboarding</span>
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator className="bg-aura-border" />
+            <DropdownMenuItem
+              onClick={() => logout().then(() => (window.location.href = "/"))}
+              className="flex items-center gap-3 cursor-pointer text-red-400 focus:text-red-400"
+            >
+              <LogOut className="h-4 w-4" />
+              <span>Log out</span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </SidebarFooter>
     </Sidebar>
   );
