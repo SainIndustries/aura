@@ -17,7 +17,7 @@ import { Check, ExternalLink, Shield, Eye, EyeOff, AlertCircle } from "lucide-re
 import type { IntegrationProvider } from "@/lib/integrations/providers";
 
 // Providers that use API key authentication instead of OAuth
-const API_KEY_PROVIDERS = ["elevenlabs", "twilio"];
+const API_KEY_PROVIDERS = ["elevenlabs", "twilio", "datadog", "aws", "railway"];
 
 interface IntegrationDetailProps {
   provider: IntegrationProvider;
@@ -47,8 +47,13 @@ export function IntegrationDetail({
   const [apiKey, setApiKey] = useState("");
   const [accountSid, setAccountSid] = useState("");
   const [authToken, setAuthToken] = useState("");
+  const [applicationKey, setApplicationKey] = useState("");
+  const [accessKeyId, setAccessKeyId] = useState("");
+  const [secretAccessKey, setSecretAccessKey] = useState("");
   const [showApiKey, setShowApiKey] = useState(false);
   const [showAuthToken, setShowAuthToken] = useState(false);
+  const [showApplicationKey, setShowApplicationKey] = useState(false);
+  const [showSecretKey, setShowSecretKey] = useState(false);
   const [error, setError] = useState("");
 
   const handleConnect = async () => {
@@ -74,6 +79,35 @@ export function IntegrationDetail({
           accountSid: accountSid.trim(),
           authToken: authToken.trim(),
         });
+      } else if (provider.id === "datadog") {
+        if (!apiKey.trim()) {
+          setError("API Key is required");
+          return;
+        }
+        const credentials: Record<string, string> = { apiKey: apiKey.trim() };
+        if (applicationKey.trim()) {
+          credentials.applicationKey = applicationKey.trim();
+        }
+        await onConnect(credentials);
+      } else if (provider.id === "aws") {
+        if (!accessKeyId.trim()) {
+          setError("Access Key ID is required");
+          return;
+        }
+        if (!secretAccessKey.trim()) {
+          setError("Secret Access Key is required");
+          return;
+        }
+        await onConnect({
+          accessKeyId: accessKeyId.trim(),
+          secretAccessKey: secretAccessKey.trim(),
+        });
+      } else if (provider.id === "railway") {
+        if (!apiKey.trim()) {
+          setError("API Token is required");
+          return;
+        }
+        await onConnect({ apiToken: apiKey.trim() });
       }
     } else {
       await onConnect();
@@ -86,6 +120,9 @@ export function IntegrationDetail({
     setApiKey("");
     setAccountSid("");
     setAuthToken("");
+    setApplicationKey("");
+    setAccessKeyId("");
+    setSecretAccessKey("");
     setError("");
   };
 
@@ -95,9 +132,14 @@ export function IntegrationDetail({
       setApiKey("");
       setAccountSid("");
       setAuthToken("");
+      setApplicationKey("");
+      setAccessKeyId("");
+      setSecretAccessKey("");
       setError("");
       setShowApiKey(false);
       setShowAuthToken(false);
+      setShowApplicationKey(false);
+      setShowSecretKey(false);
     }
     onOpenChange(isOpen);
   };
@@ -245,6 +287,169 @@ export function IntegrationDetail({
                     </a>
                   </p>
                 </>
+              )}
+
+              {provider.id === "datadog" && (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="apiKey" className="text-aura-text-light">
+                      API Key
+                    </Label>
+                    <div className="relative">
+                      <Input
+                        id="apiKey"
+                        type={showApiKey ? "text" : "password"}
+                        placeholder="Enter your Datadog API key"
+                        value={apiKey}
+                        onChange={(e) => setApiKey(e.target.value)}
+                        className="pr-10 bg-aura-elevated border-[rgba(255,255,255,0.05)]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowApiKey(!showApiKey)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-aura-text-dim hover:text-aura-text-light"
+                      >
+                        {showApiKey ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="applicationKey" className="text-aura-text-light">
+                      Application Key <span className="text-aura-text-dim">(optional)</span>
+                    </Label>
+                    <div className="relative">
+                      <Input
+                        id="applicationKey"
+                        type={showApplicationKey ? "text" : "password"}
+                        placeholder="Enter your Datadog Application key"
+                        value={applicationKey}
+                        onChange={(e) => setApplicationKey(e.target.value)}
+                        className="pr-10 bg-aura-elevated border-[rgba(255,255,255,0.05)]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowApplicationKey(!showApplicationKey)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-aura-text-dim hover:text-aura-text-light"
+                      >
+                        {showApplicationKey ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                  <p className="text-xs text-aura-text-dim">
+                    Find your keys at{" "}
+                    <a
+                      href="https://app.datadoghq.com/organization-settings/api-keys"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-aura-accent hover:underline"
+                    >
+                      app.datadoghq.com/organization-settings/api-keys
+                    </a>
+                  </p>
+                </>
+              )}
+
+              {provider.id === "aws" && (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="accessKeyId" className="text-aura-text-light">
+                      Access Key ID
+                    </Label>
+                    <Input
+                      id="accessKeyId"
+                      type="text"
+                      placeholder="AKIAIOSFODNN7EXAMPLE"
+                      value={accessKeyId}
+                      onChange={(e) => setAccessKeyId(e.target.value)}
+                      className="bg-aura-elevated border-[rgba(255,255,255,0.05)]"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="secretAccessKey" className="text-aura-text-light">
+                      Secret Access Key
+                    </Label>
+                    <div className="relative">
+                      <Input
+                        id="secretAccessKey"
+                        type={showSecretKey ? "text" : "password"}
+                        placeholder="Enter your Secret Access Key"
+                        value={secretAccessKey}
+                        onChange={(e) => setSecretAccessKey(e.target.value)}
+                        className="pr-10 bg-aura-elevated border-[rgba(255,255,255,0.05)]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowSecretKey(!showSecretKey)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-aura-text-dim hover:text-aura-text-light"
+                      >
+                        {showSecretKey ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                  <p className="text-xs text-aura-text-dim">
+                    Create an IAM user with appropriate permissions at{" "}
+                    <a
+                      href="https://console.aws.amazon.com/iam"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-aura-accent hover:underline"
+                    >
+                      console.aws.amazon.com/iam
+                    </a>
+                  </p>
+                </>
+              )}
+
+              {provider.id === "railway" && (
+                <div className="space-y-2">
+                  <Label htmlFor="apiKey" className="text-aura-text-light">
+                    API Token
+                  </Label>
+                  <div className="relative">
+                    <Input
+                      id="apiKey"
+                      type={showApiKey ? "text" : "password"}
+                      placeholder="Enter your Railway API token"
+                      value={apiKey}
+                      onChange={(e) => setApiKey(e.target.value)}
+                      className="pr-10 bg-aura-elevated border-[rgba(255,255,255,0.05)]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowApiKey(!showApiKey)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-aura-text-dim hover:text-aura-text-light"
+                    >
+                      {showApiKey ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </button>
+                  </div>
+                  <p className="text-xs text-aura-text-dim">
+                    Generate a token at{" "}
+                    <a
+                      href="https://railway.app/account/tokens"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-aura-accent hover:underline"
+                    >
+                      railway.app/account/tokens
+                    </a>
+                  </p>
+                </div>
               )}
             </div>
           )}

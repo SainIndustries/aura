@@ -188,7 +188,7 @@ export const integrationProviders: IntegrationProvider[] = [
     ],
     docsUrl: "https://signal.org/docs/",
     category: "communication",
-    comingSoon: true,
+    comingSoon: false,
   },
   {
     id: "imessage",
@@ -204,7 +204,7 @@ export const integrationProviders: IntegrationProvider[] = [
     ],
     docsUrl: "https://developer.apple.com/documentation/messages",
     category: "communication",
-    comingSoon: true,
+    comingSoon: false,
   },
   {
     id: "intercom",
@@ -221,7 +221,7 @@ export const integrationProviders: IntegrationProvider[] = [
     ],
     docsUrl: "https://developers.intercom.com",
     category: "communication",
-    comingSoon: true,
+    comingSoon: false,
   },
   {
     id: "twilio",
@@ -310,7 +310,7 @@ export const integrationProviders: IntegrationProvider[] = [
     ],
     docsUrl: "https://developer.calendly.com",
     category: "email",
-    comingSoon: true,
+    comingSoon: false,
   },
   {
     id: "cal-com",
@@ -327,7 +327,7 @@ export const integrationProviders: IntegrationProvider[] = [
     ],
     docsUrl: "https://cal.com/docs",
     category: "email",
-    comingSoon: true,
+    comingSoon: false,
   },
 
   // ============================================
@@ -907,7 +907,7 @@ export const integrationProviders: IntegrationProvider[] = [
     ],
     docsUrl: "https://developer.xero.com",
     category: "finance",
-    comingSoon: true,
+    comingSoon: false,
   },
   {
     id: "expensify",
@@ -924,7 +924,7 @@ export const integrationProviders: IntegrationProvider[] = [
     ],
     docsUrl: "https://integrations.expensify.com/Integration-Server/doc/",
     category: "finance",
-    comingSoon: true,
+    comingSoon: false,
   },
   {
     id: "bill-com",
@@ -941,7 +941,7 @@ export const integrationProviders: IntegrationProvider[] = [
     ],
     docsUrl: "https://developer.bill.com/hc/en-us",
     category: "finance",
-    comingSoon: true,
+    comingSoon: false,
   },
 
   // ============================================
@@ -962,7 +962,7 @@ export const integrationProviders: IntegrationProvider[] = [
     ],
     docsUrl: "https://developers.greenhouse.io",
     category: "hr",
-    comingSoon: true,
+    comingSoon: false,
   },
   {
     id: "lever",
@@ -979,7 +979,7 @@ export const integrationProviders: IntegrationProvider[] = [
     ],
     docsUrl: "https://hire.lever.co/developer/documentation",
     category: "hr",
-    comingSoon: true,
+    comingSoon: false,
   },
   {
     id: "bamboohr",
@@ -996,7 +996,7 @@ export const integrationProviders: IntegrationProvider[] = [
     ],
     docsUrl: "https://documentation.bamboohr.com/reference",
     category: "hr",
-    comingSoon: true,
+    comingSoon: false,
   },
   {
     id: "workday",
@@ -1013,7 +1013,7 @@ export const integrationProviders: IntegrationProvider[] = [
     ],
     docsUrl: "https://developer.workday.com",
     category: "hr",
-    comingSoon: true,
+    comingSoon: false,
   },
 
   // ============================================

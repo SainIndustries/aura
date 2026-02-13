@@ -308,7 +308,7 @@ async function sha256(message: string): Promise<string> {
 }
 
 async function hmac(
-  key: ArrayBuffer,
+  key: BufferSource,
   message: string
 ): Promise<ArrayBuffer> {
   const cryptoKey = await crypto.subtle.importKey(
@@ -322,7 +322,7 @@ async function hmac(
   return crypto.subtle.sign("HMAC", cryptoKey, encoder.encode(message));
 }
 
-async function hmacHex(key: ArrayBuffer, message: string): Promise<string> {
+async function hmacHex(key: BufferSource, message: string): Promise<string> {
   const result = await hmac(key, message);
   return Array.from(new Uint8Array(result))
     .map((b) => b.toString(16).padStart(2, "0"))
