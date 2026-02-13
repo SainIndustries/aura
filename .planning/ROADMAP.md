@@ -87,10 +87,12 @@ Plans:
   3. System automatically destroys VM and removes Tailscale device when subscription is cancelled
   4. System rolls back partial provisions on failure (deletes orphaned VMs automatically)
   5. System suspends agent on payment failure without destroying data
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 09-01: TBD during planning
+- [ ] 09-01-PLAN.md -- Hetzner power management + Tailscale device cleanup + lifecycle orchestrator module
+- [ ] 09-02-PLAN.md -- API routes (start/stop/destroy) + Stripe webhook lifecycle handlers + GitHub callback rollback
+- [ ] 09-03-PLAN.md -- Provision workflow rollback on failure (server_id in failure callback + VM cleanup step)
 
 #### Phase 10: Status Integration
 **Goal**: Dashboard shows real-time provisioning progress with production data
@@ -117,5 +119,5 @@ Phases execute in numeric order: 6 → 7 → 8 → 9 → 10
 | 6. Async Pipeline Foundation | v1.1 | 3/3 | Complete | 2026-02-13 |
 | 7. VM Provisioning via Hetzner API | v1.1 | 3/3 | Complete | 2026-02-13 |
 | 8. Agent Configuration via Ansible | v1.1 | 1/1 | Complete | 2026-02-13 |
-| 9. Lifecycle Management | v1.1 | 0/? | Not started | - |
+| 9. Lifecycle Management | v1.1 | 0/3 | Not started | - |
 | 10. Status Integration | v1.1 | 0/? | Not started | - |
