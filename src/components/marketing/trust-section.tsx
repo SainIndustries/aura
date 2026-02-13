@@ -133,7 +133,7 @@ export function TrustSection() {
             </div>
           </div>
           <a
-            href="#"
+            href="https://cal.com/shadman-hossain-k6kwji/15min?overlayCalendar=true"
             className="inline-flex items-center gap-2 rounded-lg border border-aura-border bg-aura-surface px-4 py-2 text-sm font-medium text-aura-text-light transition-all hover:border-aura-border-hover hover:text-aura-text-white"
           >
             Contact Sales
