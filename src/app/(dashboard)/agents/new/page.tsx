@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { createAgentSchema, type CreateAgentData } from "@/lib/validators/agent";
 import { StepIndicator } from "@/components/dashboard/agent-wizard/step-indicator";
 import { StepBasics } from "@/components/dashboard/agent-wizard/step-basics";
+import { StepLLM } from "@/components/dashboard/agent-wizard/step-llm";
 import { StepHeartbeat } from "@/components/dashboard/agent-wizard/step-heartbeat";
 import { StepReview } from "@/components/dashboard/agent-wizard/step-review";
 import { createAgent } from "../actions";
@@ -36,6 +37,10 @@ function NewAgentContent() {
       goal: "",
       heartbeatEnabled: false,
       heartbeatCron: "",
+      llmProvider: "openai",
+      llmModel: "gpt-4o-mini",
+      llmTemperature: 0.7,
+      llmCustomEndpoint: "",
     },
   });
 
@@ -49,6 +54,10 @@ function NewAgentContent() {
         goal: template.goal,
         heartbeatEnabled: false,
         heartbeatCron: "",
+        llmProvider: "openai",
+        llmModel: "gpt-4o-mini",
+        llmTemperature: 0.7,
+        llmCustomEndpoint: "",
       });
     }
   }, [template, form]);
@@ -58,7 +67,7 @@ function NewAgentContent() {
       const valid = await form.trigger(["name", "description", "personality", "goal"]);
       if (!valid) return;
     }
-    setStep((s) => Math.min(s + 1, 2));
+    setStep((s) => Math.min(s + 1, 3));
   };
 
   const handleBack = () => setStep((s) => Math.max(s - 1, 0));
@@ -81,7 +90,7 @@ function NewAgentContent() {
         description={
           template
             ? `Starting from the "${template.name}" template`
-            : "Set up your AI agent in 3 steps"
+            : "Set up your AI agent in 4 steps"
         }
       >
         {template && (
@@ -95,15 +104,18 @@ function NewAgentContent() {
         )}
       </PageHeader>
 
-      <StepIndicator currentStep={step} />
+      <StepIndicator currentStep={step} totalSteps={4} />
 
       <Card className="mx-auto max-w-2xl border-[rgba(255,255,255,0.05)] bg-aura-surface">
         <CardContent className="pt-6">
           {step === 0 && <StepBasics form={form} onNext={handleNext} />}
           {step === 1 && (
-            <StepHeartbeat form={form} onBack={handleBack} onNext={handleNext} />
+            <StepLLM form={form} onBack={handleBack} onNext={handleNext} />
           )}
           {step === 2 && (
+            <StepHeartbeat form={form} onBack={handleBack} onNext={handleNext} />
+          )}
+          {step === 3 && (
             <StepReview
               form={form}
               onBack={handleBack}
@@ -124,7 +136,7 @@ export default function NewAgentPage() {
         <div className="space-y-8">
           <PageHeader
             title="Create New Agent"
-            description="Set up your AI agent in 3 steps"
+            description="Set up your AI agent in 4 steps"
           />
           <div className="flex items-center justify-center py-12">
             <div className="h-8 w-8 animate-spin rounded-full border-2 border-aura-accent border-t-transparent" />

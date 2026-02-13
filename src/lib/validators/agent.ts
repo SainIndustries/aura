@@ -7,6 +7,11 @@ export const createAgentSchema = z.object({
   goal: z.string().max(1000).optional(),
   heartbeatEnabled: z.boolean(),
   heartbeatCron: z.string().optional(),
+  // LLM Configuration
+  llmProvider: z.string().optional(),
+  llmModel: z.string().optional(),
+  llmTemperature: z.number().min(0).max(1).optional(),
+  llmCustomEndpoint: z.string().optional(),
 });
 
 export type CreateAgentData = z.infer<typeof createAgentSchema>;
