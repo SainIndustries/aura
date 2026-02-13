@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-02-13)
 ## Current Position
 
 Phase: 9 of 10 (Lifecycle Management)
-Plan: 1 of 3 complete
+Plan: 2 of 3 complete
 Status: Phase 9 in progress
-Last activity: 2026-02-13 — Completed 09-01: VM lifecycle management core
+Last activity: 2026-02-13 — Completed 09-03: Provision workflow rollback
 
 Progress: [██████░░░░] 60% (v1.1 phases - 3 of 5 phases complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 8
-- Average duration: 2.1 minutes
-- Total execution time: 0.27 hours
+- Total plans completed: 9
+- Average duration: 2.0 minutes
+- Total execution time: 0.28 hours
 
 **By Phase:**
 
@@ -30,11 +30,11 @@ Progress: [██████░░░░] 60% (v1.1 phases - 3 of 5 phases comp
 | 06    | 3     | 445s  | 148s     |
 | 07    | 3     | 355s  | 118s     |
 | 08    | 1     | 147s  | 147s     |
-| 09    | 1     | 125s  | 125s     |
+| 09    | 2     | 179s  | 90s      |
 
 **Recent Trend:**
-- Last 5 plans: 07-01 (124s), 07-03 (116s), 07-02 (115s), 08-01 (147s), 09-01 (125s)
-- Trend: Consistent execution speed around 2 minutes per plan
+- Last 5 plans: 07-03 (116s), 07-02 (115s), 08-01 (147s), 09-01 (125s), 09-03 (54s)
+- Trend: Consistent execution speed with faster plan completion for focused tasks
 
 *Updated after each plan completion*
 
@@ -81,6 +81,9 @@ Recent decisions affecting current work:
 - Phase 08 Plan 01: Single platform SSH key from GitHub Secrets for all VMs (per-agent keys deferred to Phase 11)
 - [Phase 09]: Graceful shutdown with 60s timeout, fallback to forced poweroff
 - [Phase 09]: Make deleteServer and deleteDevice idempotent (404 = success) for rollback scenarios
+- [Phase 09]: Dual-layer cleanup: workflow attempts immediate VM deletion, callback handler provides second layer with Tailscale cleanup
+- [Phase 09]: Idempotent deletion: 404 HTTP status treated as success for already-deleted resources
+- [Phase 09]: Conditional cleanup: only runs if server_id is non-empty (VM was actually created)
 
 ### Pending Todos
 
@@ -113,5 +116,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-02-13
-Stopped at: Completed 09-01-PLAN.md
-Resume file: .planning/phases/09-lifecycle-management/09-01-SUMMARY.md
+Stopped at: Completed 09-03-PLAN.md
+Resume file: .planning/phases/09-lifecycle-management/09-03-SUMMARY.md
