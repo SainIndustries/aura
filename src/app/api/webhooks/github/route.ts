@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
-import { updateJobStatus, recordHeartbeat } from "@/lib/provisioning/queue";
+import { updateJobStatus, recordHeartbeat, completeProvisioningWithMetadata } from "@/lib/provisioning/queue";
 
 function verifySignature(body: string, signature: string | null): boolean {
   if (!signature) return false;
@@ -44,6 +44,10 @@ export async function POST(request: Request) {
     workflow_run_id?: string;
     error?: string;
     failed_step?: string;
+    // VM metadata (sent with status=running)
+    server_id?: string;
+    server_ip?: string;
+    tailscale_ip?: string;
   };
 
   try {
@@ -63,14 +67,28 @@ export async function POST(request: Request) {
       await recordHeartbeat(payload.job_id);
       console.log(`[GitHub Callback] Heartbeat for job ${payload.job_id}`);
     } else if (payload.status) {
-      await updateJobStatus({
-        jobId: payload.job_id,
-        status: payload.status,
-        workflowRunId: payload.workflow_run_id,
-        error: payload.error,
-        failedStep: payload.failed_step,
-      });
-      console.log(`[GitHub Callback] Job ${payload.job_id} status -> ${payload.status}`);
+      // Special handling for "running" status with VM metadata
+      if (payload.status === "running" && payload.server_id && payload.server_ip && payload.tailscale_ip) {
+        await completeProvisioningWithMetadata({
+          jobId: payload.job_id,
+          metadata: {
+            serverId: payload.server_id,
+            serverIp: payload.server_ip,
+            tailscaleIp: payload.tailscale_ip,
+          },
+        });
+        console.log(`[GitHub Callback] Job ${payload.job_id} completed with VM metadata: server=${payload.server_id}`);
+      } else {
+        // Default status update (provisioning, failed, or running without metadata)
+        await updateJobStatus({
+          jobId: payload.job_id,
+          status: payload.status,
+          workflowRunId: payload.workflow_run_id,
+          error: payload.error,
+          failedStep: payload.failed_step,
+        });
+        console.log(`[GitHub Callback] Job ${payload.job_id} status -> ${payload.status}`);
+      }
     } else {
       return NextResponse.json({ error: "Missing status or type" }, { status: 400 });
     }
