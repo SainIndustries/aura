@@ -159,6 +159,25 @@ jobs:
 
           echo "Sent success callback with VM metadata for job ${{ inputs.job_id }}"
 
+      - name: Cleanup orphaned VM on failure
+        if: failure() && steps.provision.outputs.server_id != ''
+        env:
+          HETZNER_API_TOKEN: ${{ secrets.HETZNER_API_TOKEN }}
+        run: |
+          echo "Attempting to delete orphaned Hetzner server ${{ steps.provision.outputs.server_id }}"
+          SERVER_ID="${{ steps.provision.outputs.server_id }}"
+
+          # Delete Hetzner server (idempotent - 404 is OK)
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X DELETE "https://api.hetzner.cloud/v1/servers/${SERVER_ID}" \
+            -H "Authorization: Bearer ${HETZNER_API_TOKEN}")
+
+          if [ "$HTTP_STATUS" = "200" ] || [ "$HTTP_STATUS" = "404" ]; then
+            echo "Hetzner server ${SERVER_ID} cleanup successful (HTTP ${HTTP_STATUS})"
+          else
+            echo "WARNING: Hetzner server ${SERVER_ID} cleanup returned HTTP ${HTTP_STATUS}"
+          fi
+
       - name: Send failure callback
         if: failure()
         run: |
@@ -173,7 +192,10 @@ jobs:
             --arg status "failed" \
             --arg error "Provisioning workflow failed at $FAILED_STEP" \
             --arg failed_step "$FAILED_STEP" \
-            '{job_id: $job_id, status: $status, error: $error, failed_step: $failed_step}')
+            --arg server_id "${{ steps.provision.outputs.server_id }}" \
+            --arg server_ip "${{ steps.provision.outputs.server_ip }}" \
+            --arg tailscale_ip "${{ steps.provision.outputs.tailscale_ip }}" \
+            '{job_id: $job_id, status: $status, error: $error, failed_step: $failed_step, server_id: $server_id, server_ip: $server_ip, tailscale_ip: $tailscale_ip}')
           SIGNATURE=$(echo -n "$BODY" | openssl dgst -sha256 -hmac "${{ secrets.GITHUB_CALLBACK_SECRET }}" -hex | awk '{print $NF}')
 
           curl -sf -X POST "${{ inputs.callback_url }}" \
