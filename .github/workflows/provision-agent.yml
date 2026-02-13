@@ -29,6 +29,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
       - name: Send provisioning callback
         run: |
           BODY='{"job_id":"${{ inputs.job_id }}","status":"provisioning","workflow_run_id":"${{ github.run_id }}"}'
@@ -60,28 +69,17 @@ jobs:
           echo "$HEARTBEAT_PID" > /tmp/heartbeat_pid
           echo "Heartbeat loop started (PID: $HEARTBEAT_PID)"
 
-      - name: Provision VM (placeholder)
-        run: |
-          echo "============================================"
-          echo "PLACEHOLDER: VM Provisioning"
-          echo "============================================"
-          echo "Job ID: ${{ inputs.job_id }}"
-          echo "Agent ID: ${{ inputs.agent_id }}"
-          echo "Region: ${{ inputs.region }}"
-          echo ""
-          echo "Phase 7 will implement:"
-          echo "  - Hetzner API: Create VM"
-          echo "  - Wait for VM to be ready"
-          echo "  - Store server_id, server_ip"
-          echo ""
-          echo "Phase 8 will implement:"
-          echo "  - Ansible: Configure VM"
-          echo "  - Install Docker, agent runtime"
-          echo "  - Tailscale enrollment"
-          echo ""
-          echo "Simulating work (5 seconds)..."
-          sleep 5
-          echo "Placeholder provisioning complete."
+      - name: Provision VM
+        id: provision
+        env:
+          HETZNER_API_TOKEN: ${{ secrets.HETZNER_API_TOKEN }}
+          HETZNER_SSH_KEY_ID: ${{ secrets.HETZNER_SSH_KEY_ID }}
+          TAILSCALE_OAUTH_CLIENT_ID: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
+          TAILSCALE_OAUTH_CLIENT_SECRET: ${{ secrets.TAILSCALE_OAUTH_CLIENT_SECRET }}
+          JOB_ID: ${{ inputs.job_id }}
+          AGENT_ID: ${{ inputs.agent_id }}
+          REGION: ${{ inputs.region }}
+        run: npx tsx src/lib/provisioning/provision-vm.ts
 
       - name: Stop heartbeat
         if: always()
@@ -94,7 +92,13 @@ jobs:
       - name: Send success callback
         if: success()
         run: |
-          BODY='{"job_id":"${{ inputs.job_id }}","status":"running"}'
+          BODY=$(jq -n \
+            --arg job_id "${{ inputs.job_id }}" \
+            --arg status "running" \
+            --arg server_id "${{ steps.provision.outputs.server_id }}" \
+            --arg server_ip "${{ steps.provision.outputs.server_ip }}" \
+            --arg tailscale_ip "${{ steps.provision.outputs.tailscale_ip }}" \
+            '{job_id: $job_id, status: $status, server_id: $server_id, server_ip: $server_ip, tailscale_ip: $tailscale_ip}')
           SIGNATURE=$(echo -n "$BODY" | openssl dgst -sha256 -hmac "${{ secrets.GITHUB_CALLBACK_SECRET }}" -hex | awk '{print $NF}')
 
           curl -sf -X POST "${{ inputs.callback_url }}" \
@@ -102,12 +106,17 @@ jobs:
             -H "X-Signature: $SIGNATURE" \
             -d "$BODY"
 
-          echo "Sent success callback for job ${{ inputs.job_id }}"
+          echo "Sent success callback with VM metadata for job ${{ inputs.job_id }}"
 
       - name: Send failure callback
         if: failure()
         run: |
-          BODY='{"job_id":"${{ inputs.job_id }}","status":"failed","error":"Workflow failed at step: ${{ job.status }}","failed_step":"provision"}'
+          BODY=$(jq -n \
+            --arg job_id "${{ inputs.job_id }}" \
+            --arg status "failed" \
+            --arg error "Provisioning workflow failed" \
+            --arg failed_step "provision" \
+            '{job_id: $job_id, status: $status, error: $error, failed_step: $failed_step}')
           SIGNATURE=$(echo -n "$BODY" | openssl dgst -sha256 -hmac "${{ secrets.GITHUB_CALLBACK_SECRET }}" -hex | awk '{print $NF}')
 
           curl -sf -X POST "${{ inputs.callback_url }}" \
