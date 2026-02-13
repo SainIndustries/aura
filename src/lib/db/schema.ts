@@ -13,6 +13,9 @@ export const templateCategoryEnum = pgEnum("template_category", [
   "operations",
   "engineering",
   "communications",
+  "sales",
+  "marketing",
+  "support",
 ]);
 
 export const subscriptionStatusEnum = pgEnum("subscription_status", [
