@@ -11,6 +11,7 @@ const navLinks = [
   { href: "#what", label: "Capabilities" },
   { href: "#who", label: "Solutions" },
   { href: "#how", label: "How It Works" },
+  { href: "#waitlist", label: "Join Waitlist", highlight: true },
 ];
 
 function ThemeToggle() {
@@ -97,7 +98,11 @@ function MobileMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () => void 
               key={link.href}
               href={link.href}
               onClick={onClose}
-              className="block py-3 text-base font-medium text-aura-text-light hover:text-aura-accent transition-colors"
+              className={`block py-3 text-base font-medium transition-colors ${
+                'highlight' in link && link.highlight
+                  ? "text-aura-accent hover:text-aura-accent-bright"
+                  : "text-aura-text-light hover:text-aura-accent"
+              }`}
             >
               {link.label}
             </a>
@@ -147,7 +152,11 @@ export function Navbar() {
             <a
               key={link.href}
               href={link.href}
-              className="hidden text-[13.5px] font-medium tracking-[0.15px] text-aura-text-dim transition-colors hover:text-aura-text-light min-[961px]:block"
+              className={`hidden text-[13.5px] font-medium tracking-[0.15px] transition-colors min-[961px]:block ${
+                'highlight' in link && link.highlight
+                  ? "text-aura-accent hover:text-aura-accent-bright"
+                  : "text-aura-text-dim hover:text-aura-text-light"
+              }`}
             >
               {link.label}
             </a>
