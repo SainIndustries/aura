@@ -39,10 +39,12 @@ Built organically (pre-GSD). No detailed phase breakdown.
   3. GitHub Actions workflow triggers automatically when job is queued
   4. Workflow posts status updates to callback endpoint
   5. Database reflects workflow status changes in real-time
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 06-01: TBD during planning
+- [ ] 06-01-PLAN.md — Database schema (provisioning_jobs table) + job queue operations module
+- [ ] 06-02-PLAN.md — Stripe webhook enhancement + GitHub Actions workflow trigger
+- [ ] 06-03-PLAN.md — GitHub Actions callback endpoint + provisioning workflow YAML
 
 #### Phase 7: VM Provisioning via Hetzner API
 **Goal**: Create and destroy Hetzner VMs with Tailscale networking via direct API calls
@@ -110,7 +112,7 @@ Phases execute in numeric order: 6 → 7 → 8 → 9 → 10
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 1-5. Foundation | v1.0 | - | Complete | 2026-02-13 |
-| 6. Async Pipeline Foundation | v1.1 | 0/? | Not started | - |
+| 6. Async Pipeline Foundation | v1.1 | 0/3 | Planning complete | - |
 | 7. VM Provisioning via Hetzner API | v1.1 | 0/? | Not started | - |
 | 8. Agent Configuration via Ansible | v1.1 | 0/? | Not started | - |
 | 9. Lifecycle Management | v1.1 | 0/? | Not started | - |
