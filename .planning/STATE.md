@@ -10,28 +10,28 @@ See: .planning/PROJECT.md (updated 2026-02-13)
 ## Current Position
 
 Phase: 6 of 10 (Async Pipeline Foundation)
-Plan: 1 of 3 completed
+Plan: 2 of 3 completed
 Status: In progress
-Last activity: 2026-02-13 — Completed plan 06-01: Database schema and job queue operations
+Last activity: 2026-02-13 — Completed plan 06-02: Stripe webhook integration and GitHub Actions trigger
 
-Progress: [█░░░░░░░░░] 10% (v1.1 phases - 1 of 10 plans complete)
+Progress: [██░░░░░░░░] 20% (v1.1 phases - 2 of 10 plans complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 1
-- Average duration: 3.2 minutes
-- Total execution time: 0.05 hours
+- Total plans completed: 2
+- Average duration: 2.4 minutes
+- Total execution time: 0.08 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 06    | 1     | 193s  | 193s     |
+| 06    | 2     | 293s  | 147s     |
 
 **Recent Trend:**
-- Last 5 plans: 06-01 (193s)
-- Trend: Establishing baseline
+- Last 5 plans: 06-01 (193s), 06-02 (100s)
+- Trend: Improving efficiency
 
 *Updated after each plan completion*
 
@@ -51,6 +51,10 @@ Recent decisions affecting current work:
 - Phase 06 Plan 01: Job timeout threshold = 15 minutes (900s)
 - Phase 06 Plan 01: Heartbeat interval = 60s (matches GitHub Actions)
 - Phase 06 Plan 01: On-demand timeout detection (no background cron)
+- Phase 06 Plan 02: Workflow filename hardcoded as provision-agent.yml
+- Phase 06 Plan 02: Workflow ref hardcoded as main
+- Phase 06 Plan 02: Non-blocking GitHub Actions trigger (job stays queued on failure)
+- Phase 06 Plan 02: Environment validation at trigger time (not startup)
 
 ### Pending Todos
 
@@ -77,5 +81,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-13
-Stopped at: Completed Phase 06 Plan 01 - Database schema and job queue operations
-Resume file: .planning/phases/06-async-pipeline-foundation/06-01-SUMMARY.md
+Stopped at: Completed Phase 06 Plan 02 - Stripe webhook integration and GitHub Actions trigger
+Resume file: .planning/phases/06-async-pipeline-foundation/06-02-SUMMARY.md
