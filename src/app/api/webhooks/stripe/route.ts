@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe";
 import { db } from "@/lib/db";
-import { subscriptions, users } from "@/lib/db/schema";
+import { subscriptions, users, provisioningJobs, agents } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import type Stripe from "stripe";
+import { enqueueProvisioningJob, getJobByStripeEventId } from "@/lib/provisioning/queue";
+import { triggerProvisioningWorkflow } from "@/lib/provisioning/github-actions";
 
 export async function POST(request: Request) {
   const body = await request.text();
@@ -31,12 +33,54 @@ export async function POST(request: Request) {
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
+
+        // 1. Existing: upsert subscription
         if (session.subscription && session.customer) {
           const sub = await stripe.subscriptions.retrieve(
             session.subscription as string
           );
           await upsertSubscription(sub);
         }
+
+        // 2. NEW: Queue provisioning job (idempotent)
+        const agentId = session.metadata?.agentId;
+        const userId = session.metadata?.userId;
+        const region = session.metadata?.region || "us-east";
+
+        if (agentId && userId) {
+          // Idempotency check: has this Stripe event already been processed?
+          const existingJob = await getJobByStripeEventId(event.id);
+          if (existingJob) {
+            console.log(`[Stripe Webhook] Event ${event.id} already processed, skipping`);
+            break;
+          }
+
+          try {
+            // Enqueue the provisioning job
+            const job = await enqueueProvisioningJob({
+              agentId,
+              userId,
+              stripeEventId: event.id,
+              region,
+            });
+
+            console.log(`[Stripe Webhook] Provisioning job ${job.id} queued for agent ${agentId}`);
+
+            // Trigger GitHub Actions workflow (non-blocking try/catch)
+            // If this fails, job stays "queued" and can be retried
+            try {
+              await triggerProvisioningWorkflow(job);
+            } catch (triggerError) {
+              console.error(`[Stripe Webhook] Failed to trigger workflow for job ${job.id}:`, triggerError);
+              // Job stays queued — user can retry from dashboard (Phase 10)
+              // Do NOT fail the webhook response — job is already saved
+            }
+          } catch (queueError) {
+            // Log but don't fail webhook — may be concurrent provision error
+            console.error(`[Stripe Webhook] Failed to queue provisioning:`, queueError);
+          }
+        }
+
         break;
       }
 
