@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { agents, auditLogs, agentInstances } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth/current-user";
-import { startAgent } from "@/lib/provisioning/lifecycle";
+import { destroyAgent } from "@/lib/provisioning/lifecycle";
 
 export async function POST(
   request: NextRequest,
@@ -25,30 +25,20 @@ export async function POST(
       return NextResponse.json({ error: "Agent not found" }, { status: 404 });
     }
 
-    if (agent.status !== "paused") {
-      return NextResponse.json(
-        { error: "Agent is not paused" },
-        { status: 400 }
-      );
-    }
-
-    // Check if agent has a stopped instance with serverId
+    // Check if agent has an instance (any status) with serverId
     const instance = await db.query.agentInstances.findFirst({
-      where: and(
-        eq(agentInstances.agentId, id),
-        eq(agentInstances.status, "stopped")
-      ),
+      where: eq(agentInstances.agentId, id),
     });
 
     if (instance && instance.serverId) {
       // Real infrastructure: call lifecycle orchestrator
       try {
-        await startAgent(id);
+        await destroyAgent(id);
       } catch (error) {
-        console.error("Failed to start agent:", error);
+        console.error("Failed to destroy agent:", error);
         return NextResponse.json(
           {
-            error: "Failed to start agent",
+            error: "Failed to destroy agent",
             details: error instanceof Error ? error.message : "Unknown error"
           },
           { status: 500 }
@@ -58,8 +48,15 @@ export async function POST(
       // Legacy/simulated agent: just update status in DB
       await db
         .update(agents)
-        .set({ status: "active", updatedAt: new Date() })
+        .set({ status: "paused", updatedAt: new Date() })
         .where(eq(agents.id, id));
+
+      if (instance) {
+        await db
+          .update(agentInstances)
+          .set({ status: "stopped", updatedAt: new Date() })
+          .where(eq(agentInstances.id, instance.id));
+      }
     }
 
     // Log the action
@@ -67,24 +64,23 @@ export async function POST(
       userId: user.id,
       agentId: id,
       category: "agent",
-      action: "agent_started",
-      description: `Agent "${agent.name}" was activated`,
+      action: "agent_destroyed",
+      description: `Agent "${agent.name}" was destroyed`,
       status: "success",
       metadata: {
         previousStatus: agent.status,
-        newStatus: "active",
+        hadInfrastructure: !!(instance && instance.serverId),
       },
     });
 
     return NextResponse.json({
       success: true,
-      message: "Agent started successfully",
-      agent: { ...agent, status: "active" as const },
+      message: "Agent destroyed successfully",
     });
   } catch (error) {
-    console.error("Start agent error:", error);
+    console.error("Destroy agent error:", error);
     return NextResponse.json(
-      { error: "Failed to start agent" },
+      { error: "Failed to destroy agent" },
       { status: 500 }
     );
   }
