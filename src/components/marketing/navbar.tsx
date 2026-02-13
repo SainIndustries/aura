@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { usePrivy } from "@privy-io/react-auth";
 import Link from "next/link";
 import { Logo } from "./logo";
@@ -65,48 +66,126 @@ function ThemeToggle() {
   );
 }
 
+function MobileMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+  const { ready, authenticated } = usePrivy();
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[999] min-[961px]:hidden">
+      {/* Backdrop */}
+      <div 
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      {/* Menu panel */}
+      <div className="absolute right-0 top-0 h-full w-[280px] bg-aura-surface border-l border-aura-border shadow-2xl">
+        <div className="flex items-center justify-between p-6 border-b border-aura-border">
+          <span className="font-semibold text-aura-text-white">Menu</span>
+          <button
+            onClick={onClose}
+            className="p-2 rounded-lg hover:bg-aura-elevated transition-colors"
+          >
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div className="p-6 space-y-4">
+          {navLinks.map((link) => (
+            <a
+              key={link.href}
+              href={link.href}
+              onClick={onClose}
+              className="block py-3 text-base font-medium text-aura-text-light hover:text-aura-accent transition-colors"
+            >
+              {link.label}
+            </a>
+          ))}
+          <div className="pt-4 border-t border-aura-border">
+            {ready && authenticated ? (
+              <Link
+                href="/dashboard"
+                onClick={onClose}
+                className="block w-full text-center rounded-lg bg-aura-accent px-6 py-3 font-semibold text-white hover:bg-aura-accent-bright transition-colors"
+              >
+                Dashboard
+              </Link>
+            ) : (
+              <Link
+                href="/sign-in"
+                onClick={onClose}
+                className="block w-full text-center rounded-lg bg-aura-accent px-6 py-3 font-semibold text-white hover:bg-aura-accent-bright transition-colors"
+              >
+                Get Started
+              </Link>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function Navbar() {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { ready, authenticated } = usePrivy();
 
   return (
-    <nav className="fixed inset-x-0 top-0 z-[1000] flex h-[72px] items-center justify-between border-b border-aura-border bg-aura-void/75 px-12 backdrop-blur-[24px] backdrop-saturate-[1.4] max-[960px]:px-6">
-      <div className="flex items-center gap-6">
-        <Logo />
-        {/* Powered by SAIN badge */}
-        <div className="hidden items-center gap-1.5 rounded-full border border-aura-border bg-aura-surface/50 px-3 py-1 text-[10px] font-medium text-aura-text-dim min-[768px]:flex">
-          <span>Powered by</span>
-          <span className="font-bold text-aura-text-light">SAIN Industries</span>
+    <>
+      <nav className="fixed inset-x-0 top-0 z-[1000] flex h-[72px] items-center justify-between border-b border-aura-border bg-aura-void/75 px-4 backdrop-blur-[24px] backdrop-saturate-[1.4] sm:px-6 lg:px-12">
+        <div className="flex items-center gap-4 lg:gap-6">
+          <Logo />
+          {/* Powered by SAIN badge */}
+          <div className="hidden items-center gap-1.5 rounded-full border border-aura-border bg-aura-surface/50 px-3 py-1 text-[10px] font-medium text-aura-text-dim md:flex">
+            <span>Powered by</span>
+            <span className="font-bold text-aura-text-light">SAIN Industries</span>
+          </div>
         </div>
-      </div>
-      <div className="flex items-center gap-6">
-        {navLinks.map((link) => (
-          <a
-            key={link.href}
-            href={link.href}
-            className="hidden text-[13.5px] font-medium tracking-[0.15px] text-aura-text-dim transition-colors hover:text-aura-text-light min-[961px]:block"
-          >
-            {link.label}
-          </a>
-        ))}
-        <div className="flex items-center gap-3">
-          <ThemeToggle />
-          {ready && authenticated ? (
-            <Link
-              href="/dashboard"
-              className="inline-flex rounded-lg bg-aura-accent px-[22px] py-[9px] text-[13.5px] font-semibold text-white transition-all hover:-translate-y-px hover:bg-aura-accent-bright hover:shadow-[0_4px_24px_rgba(79,143,255,0.25)]"
+        <div className="flex items-center gap-3 lg:gap-6">
+          {navLinks.map((link) => (
+            <a
+              key={link.href}
+              href={link.href}
+              className="hidden text-[13.5px] font-medium tracking-[0.15px] text-aura-text-dim transition-colors hover:text-aura-text-light min-[961px]:block"
             >
-              Dashboard
-            </Link>
-          ) : (
-            <Link
-              href="/sign-in"
-              className="inline-flex rounded-lg bg-aura-accent px-[22px] py-[9px] text-[13.5px] font-semibold text-white transition-all hover:-translate-y-px hover:bg-aura-accent-bright hover:shadow-[0_4px_24px_rgba(79,143,255,0.25)]"
+              {link.label}
+            </a>
+          ))}
+          <div className="flex items-center gap-2 sm:gap-3">
+            <ThemeToggle />
+            {/* Desktop CTA */}
+            <div className="hidden min-[961px]:block">
+              {ready && authenticated ? (
+                <Link
+                  href="/dashboard"
+                  className="inline-flex rounded-lg bg-aura-accent px-[22px] py-[9px] text-[13.5px] font-semibold text-white transition-all hover:-translate-y-px hover:bg-aura-accent-bright hover:shadow-[0_4px_24px_rgba(79,143,255,0.25)]"
+                >
+                  Dashboard
+                </Link>
+              ) : (
+                <Link
+                  href="/sign-in"
+                  className="inline-flex rounded-lg bg-aura-accent px-[22px] py-[9px] text-[13.5px] font-semibold text-white transition-all hover:-translate-y-px hover:bg-aura-accent-bright hover:shadow-[0_4px_24px_rgba(79,143,255,0.25)]"
+                >
+                  Get Started
+                </Link>
+              )}
+            </div>
+            {/* Mobile menu button */}
+            <button
+              onClick={() => setMobileMenuOpen(true)}
+              className="flex h-9 w-9 items-center justify-center rounded-lg border border-aura-border bg-aura-surface transition-all hover:border-aura-border-hover hover:bg-aura-elevated min-[961px]:hidden"
+              aria-label="Open menu"
             >
-              Get Started
-            </Link>
-          )}
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+          </div>
         </div>
-      </div>
-    </nav>
+      </nav>
+      <MobileMenu isOpen={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} />
+    </>
   );
 }

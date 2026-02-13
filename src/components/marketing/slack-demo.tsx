@@ -187,12 +187,12 @@ export function SlackDemo() {
         </div>
 
         {/* Tabs */}
-        <div className="mb-6 flex justify-center gap-2">
+        <div className="mb-6 flex justify-center gap-2 flex-wrap">
           {Object.entries(scenarios).map(([key, scenario]) => (
             <button
               key={key}
               onClick={() => setActiveTab(key as keyof typeof scenarios)}
-              className={`rounded-full px-4 py-2 text-sm font-medium transition-all ${
+              className={`rounded-full px-3 py-1.5 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium transition-all ${
                 activeTab === key
                   ? "bg-aura-accent text-white"
                   : "bg-aura-surface border border-aura-border text-aura-text-dim hover:text-aura-text-light hover:border-aura-border-hover"
