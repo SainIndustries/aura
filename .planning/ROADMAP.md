@@ -29,22 +29,22 @@ Built organically (pre-GSD). No detailed phase breakdown.
 
 **Milestone Goal:** Replace simulated provisioning with real infrastructure. Stripe payment triggers automated Hetzner VM creation, Ansible configuration, and Tailscale enrollment. Target: 50-200 agents.
 
-#### Phase 6: Async Pipeline Foundation
+#### ✅ Phase 6: Async Pipeline Foundation (Complete — 2026-02-13)
 **Goal**: Establish async orchestration pattern for long-running infrastructure operations
 **Depends on**: Nothing (first phase of v1.1)
 **Requirements**: ORCH-01, ORCH-02, ORCH-03, PROV-04, PROV-05
 **Success Criteria** (what must be TRUE):
-  1. Stripe webhook receives payment event and returns 200 within 2 seconds without blocking
-  2. Provisioning job appears in database queue with status "queued"
-  3. GitHub Actions workflow triggers automatically when job is queued
-  4. Workflow posts status updates to callback endpoint
-  5. Database reflects workflow status changes in real-time
+  1. ✓ Stripe webhook receives payment event and returns 200 within 2 seconds without blocking
+  2. ✓ Provisioning job appears in database queue with status "queued"
+  3. ✓ GitHub Actions workflow triggers automatically when job is queued
+  4. ✓ Workflow posts status updates to callback endpoint
+  5. ✓ Database reflects workflow status changes in real-time
 **Plans**: 3 plans
 
 Plans:
-- [ ] 06-01-PLAN.md — Database schema (provisioning_jobs table) + job queue operations module
-- [ ] 06-02-PLAN.md — Stripe webhook enhancement + GitHub Actions workflow trigger
-- [ ] 06-03-PLAN.md — GitHub Actions callback endpoint + provisioning workflow YAML
+- [x] 06-01-PLAN.md — Database schema (provisioning_jobs table) + job queue operations module
+- [x] 06-02-PLAN.md — Stripe webhook enhancement + GitHub Actions workflow trigger
+- [x] 06-03-PLAN.md — GitHub Actions callback endpoint + provisioning workflow YAML
 
 #### Phase 7: VM Provisioning via Hetzner API
 **Goal**: Create and destroy Hetzner VMs with Tailscale networking via direct API calls
@@ -112,7 +112,7 @@ Phases execute in numeric order: 6 → 7 → 8 → 9 → 10
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 1-5. Foundation | v1.0 | - | Complete | 2026-02-13 |
-| 6. Async Pipeline Foundation | v1.1 | 0/3 | Planning complete | - |
+| 6. Async Pipeline Foundation | v1.1 | 3/3 | Complete | 2026-02-13 |
 | 7. VM Provisioning via Hetzner API | v1.1 | 0/? | Not started | - |
 | 8. Agent Configuration via Ansible | v1.1 | 0/? | Not started | - |
 | 9. Lifecycle Management | v1.1 | 0/? | Not started | - |
