@@ -63,19 +63,19 @@ Plans:
 - [x] 07-02-PLAN.md — VM provisioning orchestrator + GitHub Actions workflow integration
 - [x] 07-03-PLAN.md — Callback handler extension + database VM metadata storage
 
-#### Phase 8: Agent Configuration via Ansible
+#### ✅ Phase 8: Agent Configuration via Ansible (Complete — 2026-02-13)
 **Goal**: Configure VMs with openclaw-ansible adapted for remote execution
 **Depends on**: Phase 7
 **Requirements**: PROV-02
 **Success Criteria** (what must be TRUE):
-  1. openclaw-ansible playbook executes against remote VM (not localhost)
-  2. Playbook installs Docker, systemd services, and agent runtime successfully
-  3. Agent process starts automatically and remains running after playbook completes
-  4. SSH connection handling and cloud-init timing work reliably on fresh VMs
+  1. ✓ openclaw-ansible playbook executes against remote VM (not localhost)
+  2. ✓ Playbook installs Docker, systemd services, and agent runtime successfully
+  3. ✓ Agent process starts automatically and remains running after playbook completes
+  4. ? SSH connection handling and cloud-init timing work reliably on fresh VMs (needs live test)
 **Plans**: 1 plan
 
 Plans:
-- [ ] 08-01-PLAN.md — Ansible playbook for remote VM configuration + GitHub Actions workflow integration
+- [x] 08-01-PLAN.md — Ansible playbook for remote VM configuration + GitHub Actions workflow integration
 
 #### Phase 9: Lifecycle Management
 **Goal**: Users can control agent state and system handles subscription lifecycle
@@ -116,6 +116,6 @@ Phases execute in numeric order: 6 → 7 → 8 → 9 → 10
 | 1-5. Foundation | v1.0 | - | Complete | 2026-02-13 |
 | 6. Async Pipeline Foundation | v1.1 | 3/3 | Complete | 2026-02-13 |
 | 7. VM Provisioning via Hetzner API | v1.1 | 3/3 | Complete | 2026-02-13 |
-| 8. Agent Configuration via Ansible | v1.1 | 0/? | Not started | - |
+| 8. Agent Configuration via Ansible | v1.1 | 1/1 | Complete | 2026-02-13 |
 | 9. Lifecycle Management | v1.1 | 0/? | Not started | - |
 | 10. Status Integration | v1.1 | 0/? | Not started | - |

@@ -5,7 +5,7 @@
 See: .planning/PROJECT.md (updated 2026-02-13)
 
 **Core value:** Users can deploy a fully configured, always-on AI agent without touching infrastructure
-**Current focus:** Phase 6 complete — ready for Phase 7
+**Current focus:** Phase 8 complete — ready for Phase 9
 
 ## Current Position
 
@@ -14,7 +14,7 @@ Plan: 1 of 1 complete
 Status: Phase 8 complete, ready for Phase 9
 Last activity: 2026-02-13 — Completed 08-01: Ansible playbook and GitHub Actions workflow integration
 
-Progress: [████░░░░░░] 40% (v1.1 phases - 2 of 5 phases complete)
+Progress: [██████░░░░] 60% (v1.1 phases - 3 of 5 phases complete)
 
 ## Performance Metrics
 
@@ -81,7 +81,13 @@ Recent decisions affecting current work:
 
 ### Pending Todos
 
-None yet.
+**Deferred verification (test before production):**
+- [ ] Add `HETZNER_SSH_PRIVATE_KEY` GitHub secret (private key matching HETZNER_SSH_KEY_ID from Phase 7)
+- [ ] Verify `TAILSCALE_OAUTH_CLIENT_ID` and `TAILSCALE_OAUTH_CLIENT_SECRET` GitHub secrets exist (from Phase 7)
+- [ ] Verify Tailscale ACL allows `tag:ci` tag (used by GitHub Actions runner)
+- [ ] Run full E2E workflow: Stripe payment → VM creation → Ansible config → running agent
+- [ ] Verify cloud-init timing + SSH readiness on fresh Hetzner VMs
+- [ ] Verify agent systemd service persistence after VM reboot
 
 ### Blockers/Concerns
 
