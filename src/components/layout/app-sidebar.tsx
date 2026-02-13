@@ -20,6 +20,7 @@ import {
   Home,
   ListChecks,
   MoreHorizontal,
+  Sparkles,
 } from "lucide-react";
 import {
   Sidebar,
@@ -50,6 +51,7 @@ const CAL_LINK =
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/chat", label: "Chat with Aura", icon: Sparkles, highlight: true },
   { href: "/agents", label: "Agents", icon: Bot },
   { href: "/templates", label: "Templates", icon: LayoutTemplate },
   { href: "/channels", label: "Channels", icon: MessageSquare },
