@@ -399,7 +399,7 @@ export const integrationProviders: IntegrationProvider[] = [
     ],
     docsUrl: "https://developer.close.com",
     category: "crm",
-    comingSoon: true,
+    comingSoon: false,
   },
   {
     id: "apollo",
@@ -416,7 +416,7 @@ export const integrationProviders: IntegrationProvider[] = [
     ],
     docsUrl: "https://apolloio.github.io/apollo-api-docs/",
     category: "crm",
-    comingSoon: true,
+    comingSoon: false,
   },
   {
     id: "linkedin-sales-navigator",
@@ -433,7 +433,7 @@ export const integrationProviders: IntegrationProvider[] = [
     ],
     docsUrl: "https://docs.microsoft.com/en-us/linkedin/sales/",
     category: "crm",
-    comingSoon: true,
+    comingSoon: false,
   },
   {
     id: "outreach",
@@ -450,7 +450,7 @@ export const integrationProviders: IntegrationProvider[] = [
     ],
     docsUrl: "https://api.outreach.io/api/v2/docs",
     category: "crm",
-    comingSoon: true,
+    comingSoon: false,
   },
   {
     id: "gong",
@@ -467,7 +467,7 @@ export const integrationProviders: IntegrationProvider[] = [
     ],
     docsUrl: "https://gong.io/api",
     category: "crm",
-    comingSoon: true,
+    comingSoon: false,
   },
 
   // ============================================
@@ -539,7 +539,7 @@ export const integrationProviders: IntegrationProvider[] = [
     ],
     docsUrl: "https://developer.monday.com",
     category: "project",
-    comingSoon: true,
+    comingSoon: false,
   },
   {
     id: "trello",
@@ -556,7 +556,7 @@ export const integrationProviders: IntegrationProvider[] = [
     ],
     docsUrl: "https://developer.atlassian.com/cloud/trello/",
     category: "project",
-    comingSoon: true,
+    comingSoon: false,
   },
   {
     id: "clickup",
@@ -573,7 +573,7 @@ export const integrationProviders: IntegrationProvider[] = [
     ],
     docsUrl: "https://clickup.com/api",
     category: "project",
-    comingSoon: true,
+    comingSoon: false,
   },
   {
     id: "basecamp",
@@ -590,7 +590,7 @@ export const integrationProviders: IntegrationProvider[] = [
     ],
     docsUrl: "https://github.com/basecamp/bc3-api",
     category: "project",
-    comingSoon: true,
+    comingSoon: false,
   },
 
   // ============================================
@@ -645,7 +645,7 @@ export const integrationProviders: IntegrationProvider[] = [
     ],
     docsUrl: "https://developer.atlassian.com/cloud/bitbucket/",
     category: "development",
-    comingSoon: true,
+    comingSoon: false,
   },
   {
     id: "datadog",
@@ -730,7 +730,7 @@ export const integrationProviders: IntegrationProvider[] = [
     ],
     docsUrl: "https://docs.aws.amazon.com/",
     category: "development",
-    comingSoon: true,
+    comingSoon: false,
   },
   {
     id: "vercel",
@@ -747,7 +747,7 @@ export const integrationProviders: IntegrationProvider[] = [
     ],
     docsUrl: "https://vercel.com/docs/rest-api",
     category: "development",
-    comingSoon: true,
+    comingSoon: false,
   },
   {
     id: "railway",
@@ -764,7 +764,7 @@ export const integrationProviders: IntegrationProvider[] = [
     ],
     docsUrl: "https://docs.railway.app/reference/public-api",
     category: "development",
-    comingSoon: true,
+    comingSoon: false,
   },
 
   // ============================================
@@ -819,7 +819,7 @@ export const integrationProviders: IntegrationProvider[] = [
     ],
     docsUrl: "https://coda.io/developers/apis/v1",
     category: "documentation",
-    comingSoon: true,
+    comingSoon: false,
   },
   {
     id: "airtable",
@@ -836,7 +836,7 @@ export const integrationProviders: IntegrationProvider[] = [
     ],
     docsUrl: "https://airtable.com/developers/web/api/introduction",
     category: "documentation",
-    comingSoon: true,
+    comingSoon: false,
   },
   {
     id: "google-docs",
@@ -853,9 +853,8 @@ export const integrationProviders: IntegrationProvider[] = [
     ],
     docsUrl: "https://developers.google.com/docs/api",
     category: "documentation",
-    comingSoon: true,
+    comingSoon: false,
   },
-
   // ============================================
   // FINANCE & ACCOUNTING
   // ============================================
@@ -1362,5 +1361,12 @@ export const googleServices = [
     description: "Access files and documents",
     icon: HardDrive,
     color: "#34A853",
+  },
+  {
+    id: "docs",
+    name: "Google Docs",
+    description: "Collaborative documents",
+    icon: FileText,
+    color: "#4285F4",
   },
 ];

@@ -23,10 +23,10 @@ import {
 import { Button } from "@/components/ui/button";
 
 // Providers that use OAuth flow
-const OAUTH_PROVIDERS = ["google", "slack", "github"];
+const OAUTH_PROVIDERS = ["google", "slack", "github", "bitbucket", "vercel"];
 
 // Providers that use API key authentication
-const API_KEY_PROVIDERS = ["elevenlabs", "twilio"];
+const API_KEY_PROVIDERS = ["elevenlabs", "twilio", "datadog", "aws", "railway"];
 
 // Provider display names for toast messages
 const PROVIDER_NAMES: Record<string, string> = {
@@ -35,6 +35,11 @@ const PROVIDER_NAMES: Record<string, string> = {
   github: "GitHub",
   elevenlabs: "ElevenLabs",
   twilio: "Twilio",
+  bitbucket: "Bitbucket",
+  datadog: "Datadog",
+  aws: "AWS",
+  vercel: "Vercel",
+  railway: "Railway",
 };
 
 interface IntegrationsGridProps {
@@ -83,9 +88,13 @@ export function IntegrationsGrid({ connectionMap }: IntegrationsGridProps) {
         google_not_configured: "Google OAuth is not configured",
         slack_not_configured: "Slack OAuth is not configured",
         github_not_configured: "GitHub OAuth is not configured",
+        bitbucket_not_configured: "Bitbucket OAuth is not configured",
+        vercel_not_configured: "Vercel OAuth is not configured",
         google_oauth_denied: "Google authorization was denied",
         slack_oauth_denied: "Slack authorization was denied",
         github_oauth_denied: "GitHub authorization was denied",
+        bitbucket_oauth_denied: "Bitbucket authorization was denied",
+        vercel_oauth_denied: "Vercel authorization was denied",
         invalid_callback: "Invalid OAuth callback",
         invalid_state: "Invalid security state. Please try again.",
         token_exchange_failed: "Failed to complete authorization",
