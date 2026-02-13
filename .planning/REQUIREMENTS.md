@@ -78,28 +78,35 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PROV-01 | — | Pending |
-| PROV-02 | — | Pending |
-| PROV-03 | — | Pending |
-| PROV-04 | — | Pending |
-| PROV-05 | — | Pending |
-| PROV-06 | — | Pending |
-| LIFE-01 | — | Pending |
-| LIFE-02 | — | Pending |
-| LIFE-03 | — | Pending |
-| LIFE-04 | — | Pending |
-| LIFE-05 | — | Pending |
-| STAT-01 | — | Pending |
-| STAT-02 | — | Pending |
-| ORCH-01 | — | Pending |
-| ORCH-02 | — | Pending |
-| ORCH-03 | — | Pending |
+| PROV-01 | Phase 7 | Pending |
+| PROV-02 | Phase 8 | Pending |
+| PROV-03 | Phase 7 | Pending |
+| PROV-04 | Phase 6 | Pending |
+| PROV-05 | Phase 6 | Pending |
+| PROV-06 | Phase 7 | Pending |
+| LIFE-01 | Phase 9 | Pending |
+| LIFE-02 | Phase 9 | Pending |
+| LIFE-03 | Phase 9 | Pending |
+| LIFE-04 | Phase 9 | Pending |
+| LIFE-05 | Phase 9 | Pending |
+| STAT-01 | Phase 10 | Pending |
+| STAT-02 | Phase 10 | Pending |
+| ORCH-01 | Phase 6 | Pending |
+| ORCH-02 | Phase 6 | Pending |
+| ORCH-03 | Phase 6 | Pending |
 
 **Coverage:**
 - v1.1 requirements: 16 total
-- Mapped to phases: 0
-- Unmapped: 16 ⚠️
+- Mapped to phases: 16
+- Unmapped: 0 ✓
+
+**Phase Breakdown:**
+- Phase 6 (Async Pipeline Foundation): 5 requirements (ORCH-01, ORCH-02, ORCH-03, PROV-04, PROV-05)
+- Phase 7 (VM Provisioning): 3 requirements (PROV-01, PROV-03, PROV-06)
+- Phase 8 (Agent Configuration): 1 requirement (PROV-02)
+- Phase 9 (Lifecycle Management): 5 requirements (LIFE-01, LIFE-02, LIFE-03, LIFE-04, LIFE-05)
+- Phase 10 (Status Integration): 2 requirements (STAT-01, STAT-02)
 
 ---
 *Requirements defined: 2026-02-13*
-*Last updated: 2026-02-13 after initial definition*
+*Last updated: 2026-02-13 after roadmap creation*
