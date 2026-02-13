@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Sora, JetBrains_Mono } from "next/font/google";
 import { PrivyProvider } from "@/components/providers/privy-provider";
+import { Toaster } from "sonner";
 import "./globals.css";
 
 const sora = Sora({
@@ -32,6 +33,17 @@ export default function RootLayout({
         className={`${sora.variable} ${jetbrainsMono.variable} font-sans antialiased`}
       >
         <PrivyProvider>{children}</PrivyProvider>
+        <Toaster
+          theme="dark"
+          position="bottom-right"
+          toastOptions={{
+            style: {
+              background: "var(--aura-surface)",
+              border: "1px solid rgba(255, 255, 255, 0.05)",
+              color: "var(--aura-text-white)",
+            },
+          }}
+        />
       </body>
     </html>
   );

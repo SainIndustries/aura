@@ -8,10 +8,12 @@ import {
   Bot,
   LayoutTemplate,
   Plug,
+  MessageSquare,
   FileText,
   Settings,
   Phone,
   LogOut,
+  Users,
 } from "lucide-react";
 import {
   Sidebar,
@@ -36,7 +38,9 @@ const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/agents", label: "Agents", icon: Bot },
   { href: "/templates", label: "Templates", icon: LayoutTemplate },
+  { href: "/channels", label: "Channels", icon: MessageSquare },
   { href: "/integrations", label: "Integrations", icon: Plug },
+  { href: "/team", label: "Team", icon: Users },
   { href: "/audit-log", label: "Audit Log", icon: FileText },
   { href: "/settings", label: "Settings", icon: Settings },
 ];

@@ -1,8 +1,12 @@
 import { Navbar } from "@/components/marketing/navbar";
 import { HeroSection } from "@/components/marketing/hero-section";
-import { TerminalDemo } from "@/components/marketing/terminal-demo";
+import { SlackDemo } from "@/components/marketing/slack-demo";
+import { ProblemSection } from "@/components/marketing/problem-section";
+import { SolutionSection } from "@/components/marketing/solution-section";
+import { ComparisonSection } from "@/components/marketing/comparison-section";
 import { CapabilitiesSection } from "@/components/marketing/capabilities-section";
-import { AudienceSection } from "@/components/marketing/audience-section";
+import { SolutionsByTeamSection } from "@/components/marketing/solutions-by-team-section";
+import { IntegrationsSection } from "@/components/marketing/integrations-section";
 import { HowItWorksSection } from "@/components/marketing/how-it-works-section";
 import { TrustSection } from "@/components/marketing/trust-section";
 import { CtaSection } from "@/components/marketing/cta-section";
@@ -13,9 +17,13 @@ export default function HomePage() {
     <>
       <Navbar />
       <HeroSection />
-      <TerminalDemo />
+      <SlackDemo />
+      <ProblemSection />
+      <SolutionSection />
+      <ComparisonSection />
       <CapabilitiesSection />
-      <AudienceSection />
+      <SolutionsByTeamSection />
+      <IntegrationsSection />
       <HowItWorksSection />
       <TrustSection />
       <CtaSection />

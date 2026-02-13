@@ -46,65 +46,87 @@
   --radius-3xl: calc(var(--radius) + 12px);
   --radius-4xl: calc(var(--radius) + 16px);
 
-  /* Aura custom colors */
-  --color-aura-void: #020308;
-  --color-aura-deep: #060a14;
-  --color-aura-surface: #0b1022;
-  --color-aura-elevated: #101730;
+  /* Aura custom colors - these are static brand colors */
   --color-aura-accent: #4f8fff;
   --color-aura-accent-bright: #6da3ff;
   --color-aura-accent-dim: #2d5fb8;
   --color-aura-mint: #34d399;
   --color-aura-amber: #fbbf24;
-  --color-aura-text-white: #edf0f7;
-  --color-aura-text-light: #b0b8cc;
-  --color-aura-text-dim: #5c6680;
-  --color-aura-text-ghost: #333d52;
+  --color-aura-purple: #7c5cfc;
+  --color-aura-purple-bright: #9b7eff;
+
+  /* Theme-aware Aura colors */
+  --color-aura-void: var(--aura-void);
+  --color-aura-deep: var(--aura-deep);
+  --color-aura-surface: var(--aura-surface);
+  --color-aura-elevated: var(--aura-elevated);
+  --color-aura-text-white: var(--aura-text-white);
+  --color-aura-text-light: var(--aura-text-light);
+  --color-aura-text-dim: var(--aura-text-dim);
+  --color-aura-text-ghost: var(--aura-text-ghost);
+  --color-aura-border: var(--aura-border);
+  --color-aura-border-hover: var(--aura-border-hover);
 
   /* Custom animations */
   --animate-orb-breathe: orbBreathe 10s ease-in-out infinite;
   --animate-fade-slide-up: fadeSlideUp 0.7s ease both;
   --animate-type-line: typeLine 0.35s ease forwards;
   --animate-blink: blink 2.5s ease-in-out infinite;
+  --animate-float: float 6s ease-in-out infinite;
+  --animate-pulse-soft: pulseSoft 3s ease-in-out infinite;
 }
 
-/* Aura is always dark — set on :root */
+/* Light theme (default for marketing) */
 :root {
   --radius: 0.625rem;
-  --background: #020308;
-  --foreground: #edf0f7;
-  --card: #0b1022;
-  --card-foreground: #edf0f7;
-  --popover: #0b1022;
-  --popover-foreground: #edf0f7;
+  
+  /* Base theme colors */
+  --background: #FAF9F7;
+  --foreground: #1a1a1a;
+  --card: #FFFFFF;
+  --card-foreground: #1a1a1a;
+  --popover: #FFFFFF;
+  --popover-foreground: #1a1a1a;
   --primary: #4f8fff;
   --primary-foreground: #ffffff;
-  --secondary: #101730;
-  --secondary-foreground: #edf0f7;
-  --muted: #101730;
-  --muted-foreground: #5c6680;
-  --accent: #101730;
-  --accent-foreground: #edf0f7;
+  --secondary: #f0f0ee;
+  --secondary-foreground: #1a1a1a;
+  --muted: #f0f0ee;
+  --muted-foreground: #666666;
+  --accent: #f5f5f3;
+  --accent-foreground: #1a1a1a;
   --destructive: #ef4444;
-  --border: rgba(255, 255, 255, 0.05);
-  --input: rgba(255, 255, 255, 0.08);
+  --border: rgba(0, 0, 0, 0.08);
+  --input: rgba(0, 0, 0, 0.05);
   --ring: #4f8fff;
   --chart-1: #4f8fff;
   --chart-2: #34d399;
   --chart-3: #fbbf24;
   --chart-4: #a78bfa;
   --chart-5: #f472b6;
-  --sidebar: #060a14;
-  --sidebar-foreground: #edf0f7;
+  --sidebar: #FAF9F7;
+  --sidebar-foreground: #1a1a1a;
   --sidebar-primary: #4f8fff;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #0b1022;
-  --sidebar-accent-foreground: #edf0f7;
-  --sidebar-border: rgba(255, 255, 255, 0.05);
+  --sidebar-accent: #f0f0ee;
+  --sidebar-accent-foreground: #1a1a1a;
+  --sidebar-border: rgba(0, 0, 0, 0.08);
   --sidebar-ring: #4f8fff;
+
+  /* Aura theme-aware colors - Light mode */
+  --aura-void: #FAF9F7;
+  --aura-deep: #f5f4f2;
+  --aura-surface: #FFFFFF;
+  --aura-elevated: #FFFFFF;
+  --aura-text-white: #1a1a1a;
+  --aura-text-light: #4a4a4a;
+  --aura-text-dim: #888888;
+  --aura-text-ghost: #bbbbbb;
+  --aura-border: rgba(0, 0, 0, 0.08);
+  --aura-border-hover: rgba(79, 143, 255, 0.25);
 }
 
-/* Keep .dark class for shadcn compatibility — same values */
+/* Dark theme */
 .dark {
   --background: #020308;
   --foreground: #edf0f7;
@@ -137,6 +159,18 @@
   --sidebar-accent-foreground: #edf0f7;
   --sidebar-border: rgba(255, 255, 255, 0.05);
   --sidebar-ring: #4f8fff;
+
+  /* Aura theme-aware colors - Dark mode */
+  --aura-void: #020308;
+  --aura-deep: #060a14;
+  --aura-surface: #0b1022;
+  --aura-elevated: #101730;
+  --aura-text-white: #edf0f7;
+  --aura-text-light: #b0b8cc;
+  --aura-text-dim: #5c6680;
+  --aura-text-ghost: #333d52;
+  --aura-border: rgba(255, 255, 255, 0.05);
+  --aura-border-hover: rgba(79, 143, 255, 0.12);
 }
 
 @layer base {
@@ -151,8 +185,8 @@
   }
 }
 
-/* Noise overlay like original */
-body::after {
+/* Noise overlay - only in dark mode */
+.dark body::after {
   content: '';
   position: fixed;
   inset: 0;
@@ -185,4 +219,84 @@ body::after {
 @keyframes blink {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.3; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+@keyframes pulseSoft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+/* Slack Demo Animations */
+@keyframes slideInMessage {
+  from { 
+    opacity: 0; 
+    transform: translateY(10px); 
+  }
+  to { 
+    opacity: 1; 
+    transform: translateY(0); 
+  }
+}
+
+@keyframes typingDots {
+  0%, 20% { opacity: 0.3; }
+  50% { opacity: 1; }
+  80%, 100% { opacity: 0.3; }
+}
+
+.animate-slide-in-message {
+  animation: slideInMessage 0.4s ease forwards;
+}
+
+.animate-typing-dot {
+  animation: typingDots 1.4s ease-in-out infinite;
+}
+
+.animate-typing-dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.animate-typing-dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+/* Theme transition */
+body {
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Light mode specific adjustments */
+:root:not(.dark) .shadow-glow {
+  box-shadow: 0 4px 20px rgba(79, 143, 255, 0.15);
+}
+
+.dark .shadow-glow {
+  box-shadow: 0 4px 20px rgba(79, 143, 255, 0.25);
+}
+
+/* Gradient text helper */
+.gradient-text {
+  @apply bg-gradient-to-br from-aura-accent-bright via-aura-purple to-aura-accent bg-clip-text text-transparent;
+}
+
+/* Card hover effect */
+.card-hover {
+  @apply transition-all duration-300;
+}
+
+.card-hover:hover {
+  @apply -translate-y-1;
+}
+
+:root:not(.dark) .card-hover:hover {
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
+}
+
+.dark .card-hover:hover {
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.3), 0 0 40px -10px rgba(79, 143, 255, 0.12);
 }

@@ -1,0 +1,136 @@
+"use client";
+
+import { useState } from "react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { IntegrationDetail } from "./integration-detail";
+import type { IntegrationProvider } from "@/lib/integrations/providers";
+
+interface IntegrationCardProps {
+  provider: IntegrationProvider;
+  isConnected: boolean;
+  connectedAt?: Date | null;
+  onConnect: () => Promise<void>;
+  onDisconnect: () => Promise<void>;
+}
+
+export function IntegrationCard({
+  provider,
+  isConnected,
+  connectedAt,
+  onConnect,
+  onDisconnect,
+}: IntegrationCardProps) {
+  const [showDetail, setShowDetail] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleConnect = async () => {
+    setIsLoading(true);
+    try {
+      await onConnect();
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDisconnect = async () => {
+    setIsLoading(true);
+    try {
+      await onDisconnect();
+    } finally {
+      setIsLoading(false);
+      setShowDetail(false);
+    }
+  };
+
+  const Icon = provider.icon;
+
+  return (
+    <>
+      <Card
+        className="group cursor-pointer border-[rgba(255,255,255,0.05)] bg-aura-surface transition-all hover:border-[rgba(79,143,255,0.12)]"
+        onClick={() => setShowDetail(true)}
+      >
+        <CardContent className="pt-6">
+          <div className="flex items-start justify-between">
+            <div className="flex items-center gap-4">
+              <div
+                className="flex h-12 w-12 items-center justify-center rounded-xl"
+                style={{ backgroundColor: `${provider.color}15` }}
+              >
+                <Icon
+                  className="h-6 w-6"
+                  style={{ color: provider.color }}
+                />
+              </div>
+              <div>
+                <h3 className="font-semibold text-aura-text-white">
+                  {provider.name}
+                </h3>
+                <p className="mt-0.5 text-sm text-aura-text-dim">
+                  {provider.description}
+                </p>
+              </div>
+            </div>
+            <Badge
+              variant="secondary"
+              className={
+                isConnected
+                  ? "bg-aura-mint/20 text-aura-mint"
+                  : "bg-aura-text-dim/20 text-aura-text-dim"
+              }
+            >
+              {isConnected ? "Connected" : "Not Connected"}
+            </Badge>
+          </div>
+
+          <div className="mt-4 flex items-center justify-between">
+            <div className="flex flex-wrap gap-1.5">
+              {provider.capabilities.slice(0, 3).map((cap) => (
+                <span
+                  key={cap}
+                  className="rounded-md bg-aura-elevated px-2 py-0.5 text-xs text-aura-text-dim"
+                >
+                  {cap}
+                </span>
+              ))}
+              {provider.capabilities.length > 3 && (
+                <span className="rounded-md bg-aura-elevated px-2 py-0.5 text-xs text-aura-text-dim">
+                  +{provider.capabilities.length - 3} more
+                </span>
+              )}
+            </div>
+            <Button
+              variant={isConnected ? "outline" : "default"}
+              size="sm"
+              className="opacity-0 transition-opacity group-hover:opacity-100"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (isConnected) {
+                  setShowDetail(true);
+                } else {
+                  handleConnect();
+                }
+              }}
+              disabled={isLoading}
+            >
+              {isConnected ? "Manage" : "Connect"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <IntegrationDetail
+        provider={provider}
+        isConnected={isConnected}
+        connectedAt={connectedAt}
+        open={showDetail}
+        onOpenChange={setShowDetail}
+        onConnect={handleConnect}
+        onDisconnect={handleDisconnect}
+        isLoading={isLoading}
+      />
+    </>
+  );
+}

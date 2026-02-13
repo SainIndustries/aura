@@ -3,7 +3,7 @@ import Link from "next/link";
 export function LogoMark({ className }: { className?: string }) {
   return (
     <div
-      className={`relative grid h-[34px] w-[34px] place-items-center overflow-hidden rounded-[9px] bg-gradient-to-br from-aura-accent to-[#7c5cfc] ${className ?? ""}`}
+      className={`relative grid h-[34px] w-[34px] place-items-center overflow-hidden rounded-[9px] bg-gradient-to-br from-aura-accent to-aura-purple ${className ?? ""}`}
     >
       <div className="absolute inset-0 rounded-[inherit] bg-gradient-to-b from-white/15 to-transparent" />
       <svg
