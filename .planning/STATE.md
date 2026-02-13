@@ -9,19 +9,19 @@ See: .planning/PROJECT.md (updated 2026-02-13)
 
 ## Current Position
 
-Phase: 8 of 10 (Agent Configuration via Ansible)
-Plan: 1 of 1 complete
-Status: Phase 8 complete, ready for Phase 9
-Last activity: 2026-02-13 — Completed 08-01: Ansible playbook and GitHub Actions workflow integration
+Phase: 9 of 10 (Lifecycle Management)
+Plan: 1 of 3 complete
+Status: Phase 9 in progress
+Last activity: 2026-02-13 — Completed 09-01: VM lifecycle management core
 
 Progress: [██████░░░░] 60% (v1.1 phases - 3 of 5 phases complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 7
-- Average duration: 2.2 minutes
-- Total execution time: 0.24 hours
+- Total plans completed: 8
+- Average duration: 2.1 minutes
+- Total execution time: 0.27 hours
 
 **By Phase:**
 
@@ -30,9 +30,10 @@ Progress: [██████░░░░] 60% (v1.1 phases - 3 of 5 phases comp
 | 06    | 3     | 445s  | 148s     |
 | 07    | 3     | 355s  | 118s     |
 | 08    | 1     | 147s  | 147s     |
+| 09    | 1     | 125s  | 125s     |
 
 **Recent Trend:**
-- Last 5 plans: 06-03 (152s), 07-01 (124s), 07-03 (116s), 07-02 (115s), 08-01 (147s)
+- Last 5 plans: 07-01 (124s), 07-03 (116s), 07-02 (115s), 08-01 (147s), 09-01 (125s)
 - Trend: Consistent execution speed around 2 minutes per plan
 
 *Updated after each plan completion*
@@ -78,6 +79,8 @@ Recent decisions affecting current work:
 - Phase 08 Plan 01: Accept new SSH host keys with StrictHostKeyChecking=accept-new (fresh VMs)
 - Phase 08 Plan 01: Set agent service to enabled but allow start to fail (agent binary deployed in later phase)
 - Phase 08 Plan 01: Single platform SSH key from GitHub Secrets for all VMs (per-agent keys deferred to Phase 11)
+- [Phase 09]: Graceful shutdown with 60s timeout, fallback to forced poweroff
+- [Phase 09]: Make deleteServer and deleteDevice idempotent (404 = success) for rollback scenarios
 
 ### Pending Todos
 
@@ -110,5 +113,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-02-13
-Stopped at: Completed Phase 08 Plan 01 — Ansible playbook and GitHub Actions workflow integration
-Resume file: .planning/phases/08-agent-configuration-via-ansible/08-01-SUMMARY.md
+Stopped at: Completed 09-01-PLAN.md
+Resume file: .planning/phases/09-lifecycle-management/09-01-SUMMARY.md
