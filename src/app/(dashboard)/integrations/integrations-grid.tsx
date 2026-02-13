@@ -1,7 +1,7 @@
 "use client";
 
-import { useTransition, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useTransition, useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { IntegrationCard } from "@/components/dashboard/integration-card";
 import {
   integrationProviders,
@@ -9,7 +9,7 @@ import {
   type IntegrationCategory,
   type IntegrationProvider,
 } from "@/lib/integrations/providers";
-import { connectIntegration, disconnectIntegration } from "./actions";
+import { connectIntegration, disconnectIntegration, getOAuthUrl } from "./actions";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +21,16 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
+
+// Providers that use OAuth flow
+const OAUTH_PROVIDERS = ["google", "slack", "github"];
+
+// Provider display names for toast messages
+const PROVIDER_NAMES: Record<string, string> = {
+  google: "Google Workspace",
+  slack: "Slack",
+  github: "GitHub",
+};
 
 interface IntegrationsGridProps {
   connectionMap: Map<string, { connectedAt: Date | null; id: string }>;
@@ -43,6 +53,7 @@ const categoryOrder: IntegrationCategory[] = [
 
 export function IntegrationsGrid({ connectionMap }: IntegrationsGridProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategories, setSelectedCategories] = useState<Set<IntegrationCategory>>(
@@ -50,7 +61,46 @@ export function IntegrationsGrid({ connectionMap }: IntegrationsGridProps) {
   );
   const [showComingSoon, setShowComingSoon] = useState(true);
 
+  // Handle success/error messages from OAuth callbacks
+  useEffect(() => {
+    const success = searchParams.get("success");
+    const error = searchParams.get("error");
+
+    if (success) {
+      const providerName = PROVIDER_NAMES[success] || success;
+      toast.success(`${providerName} connected successfully!`);
+      // Clean up URL
+      router.replace("/integrations");
+    }
+
+    if (error) {
+      const errorMessages: Record<string, string> = {
+        google_not_configured: "Google OAuth is not configured",
+        slack_not_configured: "Slack OAuth is not configured",
+        github_not_configured: "GitHub OAuth is not configured",
+        google_oauth_denied: "Google authorization was denied",
+        slack_oauth_denied: "Slack authorization was denied",
+        github_oauth_denied: "GitHub authorization was denied",
+        invalid_callback: "Invalid OAuth callback",
+        invalid_state: "Invalid security state. Please try again.",
+        token_exchange_failed: "Failed to complete authorization",
+        callback_failed: "An error occurred during authorization",
+        oauth_failed: "Failed to start authorization",
+      };
+      toast.error(errorMessages[error] || "Failed to connect integration");
+      // Clean up URL
+      router.replace("/integrations");
+    }
+  }, [searchParams, router]);
+
   const handleConnect = async (providerId: string) => {
+    // For OAuth providers, redirect to the OAuth flow
+    if (OAUTH_PROVIDERS.includes(providerId)) {
+      window.location.href = `/api/integrations/${providerId}`;
+      return;
+    }
+
+    // For non-OAuth providers, use the server action
     try {
       await connectIntegration(providerId);
       toast.success("Integration connected successfully");

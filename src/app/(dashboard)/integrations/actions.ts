@@ -1,10 +1,14 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { integrations } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth/current-user";
+
+// Providers that support OAuth
+const OAUTH_PROVIDERS = ["google", "slack", "github"];
 
 export async function getUserIntegrations() {
   const user = await getCurrentUser();
@@ -33,12 +37,16 @@ export async function connectIntegration(provider: string) {
     throw new Error("Integration already connected");
   }
 
-  // In a real implementation, this would initiate OAuth flow
-  // For now, we'll create a placeholder integration
+  // For OAuth providers, redirect to the OAuth flow
+  if (OAUTH_PROVIDERS.includes(provider)) {
+    redirect(`/api/integrations/${provider}`);
+  }
+
+  // For non-OAuth providers, create a placeholder integration
+  // This will be replaced when we implement those providers
   await db.insert(integrations).values({
     userId: user.id,
     provider,
-    // These would be set after OAuth callback
     accessToken: null,
     refreshToken: null,
     tokenExpiry: null,
@@ -49,6 +57,13 @@ export async function connectIntegration(provider: string) {
 
   revalidatePath("/integrations");
   return { success: true };
+}
+
+export async function getOAuthUrl(provider: string): Promise<string | null> {
+  if (OAUTH_PROVIDERS.includes(provider)) {
+    return `/api/integrations/${provider}`;
+  }
+  return null;
 }
 
 export async function disconnectIntegration(provider: string) {
@@ -84,4 +99,20 @@ export async function getIntegrationStatus(provider: string) {
   });
 
   return integration;
+}
+
+export async function reconnectIntegration(provider: string) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("Unauthorized");
+
+  // For OAuth providers, redirect to the OAuth flow to refresh tokens
+  if (OAUTH_PROVIDERS.includes(provider)) {
+    redirect(`/api/integrations/${provider}`);
+  }
+
+  throw new Error("Provider does not support reconnection");
+}
+
+export async function isOAuthProvider(provider: string): Promise<boolean> {
+  return OAUTH_PROVIDERS.includes(provider);
 }

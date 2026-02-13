@@ -52,6 +52,15 @@ export const auditLogCategoryEnum = pgEnum("audit_log_category", [
   "billing",
 ]);
 
+export const provisioningStatusEnum = pgEnum("provisioning_status", [
+  "pending",
+  "provisioning",
+  "running",
+  "stopping",
+  "stopped",
+  "failed",
+]);
+
 export const teamRoleEnum = pgEnum("team_role", [
   "owner",
   "admin",
@@ -198,6 +207,27 @@ export const integrations = pgTable("integrations", {
     .notNull(),
 });
 
+export const agentInstances = pgTable("agent_instances", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  agentId: uuid("agent_id")
+    .references(() => agents.id, { onDelete: "cascade" })
+    .notNull(),
+  status: provisioningStatusEnum("status").notNull().default("pending"),
+  serverId: text("server_id"), // Hetzner server ID when provisioned
+  serverIp: text("server_ip"),
+  tailscaleIp: text("tailscale_ip"),
+  region: text("region").default("us-east"),
+  error: text("error"),
+  startedAt: timestamp("started_at", { withTimezone: true }),
+  stoppedAt: timestamp("stopped_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   subscriptions: many(subscriptions),
@@ -222,6 +252,14 @@ export const agentsRelations = relations(agents, ({ one, many }) => ({
     references: [users.id],
   }),
   channels: many(channels),
+  instances: many(agentInstances),
+}));
+
+export const agentInstancesRelations = relations(agentInstances, ({ one }) => ({
+  agent: one(agents, {
+    fields: [agentInstances.agentId],
+    references: [agents.id],
+  }),
 }));
 
 export const channelsRelations = relations(channels, ({ one }) => ({

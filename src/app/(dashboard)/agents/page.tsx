@@ -1,14 +1,36 @@
 import Link from "next/link";
 import { Bot, Plus } from "lucide-react";
 import { db } from "@/lib/db";
-import { agents } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { agents, auditLogs, integrations } from "@/lib/db/schema";
+import { eq, desc, sql } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { AgentCard } from "@/components/dashboard/agent-card";
+
+async function getAgentStats(userId: string, agentId: string) {
+  // Get action count for this agent
+  const actionsResult = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(auditLogs)
+    .where(eq(auditLogs.agentId, agentId));
+  const actionCount = Number(actionsResult[0]?.count || 0);
+
+  // Get last activity for this agent
+  const lastActivity = await db
+    .select({ createdAt: auditLogs.createdAt })
+    .from(auditLogs)
+    .where(eq(auditLogs.agentId, agentId))
+    .orderBy(desc(auditLogs.createdAt))
+    .limit(1);
+
+  return {
+    actionCount,
+    lastActivity: lastActivity[0]?.createdAt || null,
+  };
+}
 
 export default async function AgentsPage() {
   const user = await getCurrentUser();
@@ -18,6 +40,27 @@ export default async function AgentsPage() {
         orderBy: (a, { desc }) => [desc(a.createdAt)],
       })
     : [];
+
+  // Get user integrations for display
+  const userIntegrations = user
+    ? await db.query.integrations.findMany({
+        where: eq(integrations.userId, user.id),
+      })
+    : [];
+
+  const integrationNames = userIntegrations.map((i) => i.provider);
+
+  // Get stats for each agent
+  const agentStats = user
+    ? await Promise.all(
+        userAgents.map(async (agent) => {
+          const stats = await getAgentStats(user.id, agent.id);
+          return { agentId: agent.id, ...stats };
+        })
+      )
+    : [];
+
+  const statsMap = new Map(agentStats.map((s) => [s.agentId, s]));
 
   const tabs = [
     { value: "all", label: "All", agents: userAgents },
@@ -95,15 +138,21 @@ export default async function AgentsPage() {
         {tabs.map((tab) => (
           <TabsContent key={tab.value} value={tab.value}>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {tab.agents.map((agent) => (
-                <AgentCard
-                  key={agent.id}
-                  id={agent.id}
-                  name={agent.name}
-                  description={agent.description}
-                  status={agent.status}
-                />
-              ))}
+              {tab.agents.map((agent) => {
+                const stats = statsMap.get(agent.id);
+                return (
+                  <AgentCard
+                    key={agent.id}
+                    id={agent.id}
+                    name={agent.name}
+                    description={agent.description}
+                    status={agent.status}
+                    lastActivity={stats?.lastActivity}
+                    actionCount={stats?.actionCount}
+                    integrations={integrationNames}
+                  />
+                );
+              })}
             </div>
           </TabsContent>
         ))}
