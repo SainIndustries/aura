@@ -52,9 +52,10 @@ const channelIcons: Record<ChannelType, React.ComponentType<{ className?: string
   web: Globe,
   slack: Slack,
   telegram: MessageCircle,
-  whatsapp: Phone,
+  whatsapp: MessageCircle,
   discord: Hash,
   email: Mail,
+  phone: Phone,
 };
 
 const channelNames: Record<ChannelType, string> = {
@@ -64,6 +65,7 @@ const channelNames: Record<ChannelType, string> = {
   whatsapp: "WhatsApp",
   discord: "Discord",
   email: "Email",
+  phone: "Phone",
 };
 
 export function ChannelConfigModal({
@@ -456,6 +458,133 @@ function ChannelSpecificConfig({
             />
             <p className="text-xs text-aura-text-dim">
               Gmail search filter to limit which emails are processed
+            </p>
+          </div>
+        </div>
+      );
+
+    case "phone":
+      return (
+        <div className="space-y-4">
+          <div className="rounded-lg border border-[rgba(255,255,255,0.05)] bg-aura-bg/50 p-4">
+            <h4 className="mb-2 font-medium text-aura-text-white">Phone Channel</h4>
+            <p className="text-sm text-aura-text-dim">
+              Enable your agent to handle inbound and outbound voice calls via Twilio
+              and ElevenLabs. Requires both integrations to be connected.
+            </p>
+          </div>
+
+          {/* Twilio Phone Number */}
+          <div className="space-y-2">
+            <Label htmlFor="phone-twilio-number">Twilio Phone Number</Label>
+            <Input
+              id="phone-twilio-number"
+              placeholder="+1234567890"
+              value={(config.twilioPhoneNumber as string) || ""}
+              onChange={(e) => updateConfig("twilioPhoneNumber", e.target.value)}
+              className="border-[rgba(255,255,255,0.1)] bg-aura-bg font-mono"
+            />
+            <p className="text-xs text-aura-text-dim">
+              Select a phone number from your connected Twilio account
+            </p>
+          </div>
+
+          {/* ElevenLabs Voice */}
+          <div className="space-y-2">
+            <Label htmlFor="phone-voice">ElevenLabs Voice ID</Label>
+            <Input
+              id="phone-voice"
+              placeholder="Voice ID or name"
+              value={(config.elevenLabsVoiceId as string) || ""}
+              onChange={(e) => updateConfig("elevenLabsVoiceId", e.target.value)}
+              className="border-[rgba(255,255,255,0.1)] bg-aura-bg font-mono"
+            />
+            <p className="text-xs text-aura-text-dim">
+              Select a voice from your connected ElevenLabs account
+            </p>
+          </div>
+
+          {/* Call Handling Settings */}
+          <div className="rounded-lg border border-[rgba(255,255,255,0.05)] p-4 space-y-4">
+            <h4 className="font-medium text-aura-text-white">Call Handling</h4>
+
+            <div className="space-y-2">
+              <Label htmlFor="phone-answer-mode">Answer Mode</Label>
+              <select
+                id="phone-answer-mode"
+                value={(config.answerMode as string) || "auto"}
+                onChange={(e) => updateConfig("answerMode", e.target.value)}
+                className="w-full rounded-md border border-[rgba(255,255,255,0.1)] bg-aura-bg px-3 py-2 text-sm text-aura-text-white"
+              >
+                <option value="auto">Answer automatically</option>
+                <option value="voicemail">Send to voicemail</option>
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="phone-greeting">Greeting Message</Label>
+              <Input
+                id="phone-greeting"
+                placeholder="Hello! How can I help you today?"
+                value={(config.greetingMessage as string) || ""}
+                onChange={(e) => updateConfig("greetingMessage", e.target.value)}
+                className="border-[rgba(255,255,255,0.1)] bg-aura-bg"
+              />
+              <p className="text-xs text-aura-text-dim">
+                Initial message when the agent answers a call
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="phone-business-hours">Business Hours (optional)</Label>
+              <Input
+                id="phone-business-hours"
+                placeholder="Mon-Fri 9am-5pm EST"
+                value={(config.businessHours as string) || ""}
+                onChange={(e) => updateConfig("businessHours", e.target.value)}
+                className="border-[rgba(255,255,255,0.1)] bg-aura-bg"
+              />
+              <p className="text-xs text-aura-text-dim">
+                Leave empty for 24/7 availability
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="phone-voicemail-greeting">Voicemail Greeting (optional)</Label>
+              <Input
+                id="phone-voicemail-greeting"
+                placeholder="Leave a message after the beep..."
+                value={(config.voicemailGreeting as string) || ""}
+                onChange={(e) => updateConfig("voicemailGreeting", e.target.value)}
+                className="border-[rgba(255,255,255,0.1)] bg-aura-bg"
+              />
+            </div>
+          </div>
+
+          {/* Test Call Button */}
+          <div className="space-y-2">
+            <Label htmlFor="phone-test-number">Test Call Number</Label>
+            <div className="flex gap-2">
+              <Input
+                id="phone-test-number"
+                placeholder="+1234567890"
+                value={(config.testPhoneNumber as string) || ""}
+                onChange={(e) => updateConfig("testPhoneNumber", e.target.value)}
+                className="border-[rgba(255,255,255,0.1)] bg-aura-bg font-mono flex-1"
+              />
+              <button
+                type="button"
+                className="px-4 py-2 text-sm font-medium rounded-md bg-[#F22F46]/20 text-[#F22F46] hover:bg-[#F22F46]/30 transition-colors"
+                onClick={() => {
+                  // TODO: Implement test call
+                  console.log("Test call to:", config.testPhoneNumber);
+                }}
+              >
+                Test Call
+              </button>
+            </div>
+            <p className="text-xs text-aura-text-dim">
+              Enter a phone number to receive a test call from your agent
             </p>
           </div>
         </div>

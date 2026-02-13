@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -10,8 +11,13 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Check, ExternalLink, Shield } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Check, ExternalLink, Shield, Eye, EyeOff, AlertCircle } from "lucide-react";
 import type { IntegrationProvider } from "@/lib/integrations/providers";
+
+// Providers that use API key authentication instead of OAuth
+const API_KEY_PROVIDERS = ["elevenlabs", "twilio"];
 
 interface IntegrationDetailProps {
   provider: IntegrationProvider;
@@ -19,7 +25,7 @@ interface IntegrationDetailProps {
   connectedAt?: Date | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onConnect: () => Promise<void>;
+  onConnect: (credentials?: Record<string, string>) => Promise<void>;
   onDisconnect: () => Promise<void>;
   isLoading: boolean;
 }
@@ -35,9 +41,69 @@ export function IntegrationDetail({
   isLoading,
 }: IntegrationDetailProps) {
   const Icon = provider.icon;
+  const isApiKeyProvider = API_KEY_PROVIDERS.includes(provider.id);
+
+  // State for API key form
+  const [apiKey, setApiKey] = useState("");
+  const [accountSid, setAccountSid] = useState("");
+  const [authToken, setAuthToken] = useState("");
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [showAuthToken, setShowAuthToken] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleConnect = async () => {
+    setError("");
+
+    if (isApiKeyProvider) {
+      if (provider.id === "elevenlabs") {
+        if (!apiKey.trim()) {
+          setError("API key is required");
+          return;
+        }
+        await onConnect({ apiKey: apiKey.trim() });
+      } else if (provider.id === "twilio") {
+        if (!accountSid.trim()) {
+          setError("Account SID is required");
+          return;
+        }
+        if (!authToken.trim()) {
+          setError("Auth Token is required");
+          return;
+        }
+        await onConnect({
+          accountSid: accountSid.trim(),
+          authToken: authToken.trim(),
+        });
+      }
+    } else {
+      await onConnect();
+    }
+  };
+
+  const handleDisconnect = async () => {
+    await onDisconnect();
+    // Reset form
+    setApiKey("");
+    setAccountSid("");
+    setAuthToken("");
+    setError("");
+  };
+
+  const handleOpenChange = (isOpen: boolean) => {
+    if (!isOpen) {
+      // Reset form when closing
+      setApiKey("");
+      setAccountSid("");
+      setAuthToken("");
+      setError("");
+      setShowApiKey(false);
+      setShowAuthToken(false);
+    }
+    onOpenChange(isOpen);
+  };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="border-aura-border bg-aura-surface sm:max-w-md">
         <DialogHeader>
           <div className="flex items-center gap-4">
@@ -75,6 +141,113 @@ export function IntegrationDetail({
               </span>
             )}
           </div>
+
+          {/* API Key Form for non-connected API key providers */}
+          {isApiKeyProvider && !isConnected && (
+            <div className="space-y-4">
+              {error && (
+                <div className="flex items-center gap-2 rounded-lg bg-red-500/10 p-3 text-sm text-red-400">
+                  <AlertCircle className="h-4 w-4" />
+                  {error}
+                </div>
+              )}
+
+              {provider.id === "elevenlabs" && (
+                <div className="space-y-2">
+                  <Label htmlFor="apiKey" className="text-aura-text-light">
+                    API Key
+                  </Label>
+                  <div className="relative">
+                    <Input
+                      id="apiKey"
+                      type={showApiKey ? "text" : "password"}
+                      placeholder="Enter your ElevenLabs API key"
+                      value={apiKey}
+                      onChange={(e) => setApiKey(e.target.value)}
+                      className="pr-10 bg-aura-elevated border-[rgba(255,255,255,0.05)]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowApiKey(!showApiKey)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-aura-text-dim hover:text-aura-text-light"
+                    >
+                      {showApiKey ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </button>
+                  </div>
+                  <p className="text-xs text-aura-text-dim">
+                    Find your API key at{" "}
+                    <a
+                      href="https://elevenlabs.io/app/settings/api-keys"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-aura-accent hover:underline"
+                    >
+                      elevenlabs.io/app/settings/api-keys
+                    </a>
+                  </p>
+                </div>
+              )}
+
+              {provider.id === "twilio" && (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="accountSid" className="text-aura-text-light">
+                      Account SID
+                    </Label>
+                    <Input
+                      id="accountSid"
+                      type="text"
+                      placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                      value={accountSid}
+                      onChange={(e) => setAccountSid(e.target.value)}
+                      className="bg-aura-elevated border-[rgba(255,255,255,0.05)]"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="authToken" className="text-aura-text-light">
+                      Auth Token
+                    </Label>
+                    <div className="relative">
+                      <Input
+                        id="authToken"
+                        type={showAuthToken ? "text" : "password"}
+                        placeholder="Enter your Auth Token"
+                        value={authToken}
+                        onChange={(e) => setAuthToken(e.target.value)}
+                        className="pr-10 bg-aura-elevated border-[rgba(255,255,255,0.05)]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowAuthToken(!showAuthToken)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-aura-text-dim hover:text-aura-text-light"
+                      >
+                        {showAuthToken ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                  <p className="text-xs text-aura-text-dim">
+                    Find your credentials at{" "}
+                    <a
+                      href="https://console.twilio.com"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-aura-accent hover:underline"
+                    >
+                      console.twilio.com
+                    </a>
+                  </p>
+                </>
+              )}
+            </div>
+          )}
 
           {/* Capabilities */}
           <div>
@@ -131,14 +304,14 @@ export function IntegrationDetail({
             <>
               <Button
                 variant="outline"
-                onClick={() => onOpenChange(false)}
+                onClick={() => handleOpenChange(false)}
                 disabled={isLoading}
               >
                 Close
               </Button>
               <Button
                 variant="destructive"
-                onClick={onDisconnect}
+                onClick={handleDisconnect}
                 disabled={isLoading}
               >
                 {isLoading ? "Disconnecting..." : "Disconnect"}
@@ -148,12 +321,12 @@ export function IntegrationDetail({
             <>
               <Button
                 variant="outline"
-                onClick={() => onOpenChange(false)}
+                onClick={() => handleOpenChange(false)}
                 disabled={isLoading}
               >
                 Cancel
               </Button>
-              <Button onClick={onConnect} disabled={isLoading}>
+              <Button onClick={handleConnect} disabled={isLoading}>
                 {isLoading ? "Connecting..." : "Connect"}
               </Button>
             </>

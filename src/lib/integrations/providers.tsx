@@ -55,6 +55,7 @@ import {
   Cpu,
   Globe,
   Radio,
+  Mic,
 } from "lucide-react";
 
 export type IntegrationCategory =
@@ -237,7 +238,24 @@ export const integrationProviders: IntegrationProvider[] = [
     ],
     docsUrl: "https://www.twilio.com/docs",
     category: "communication",
-    comingSoon: true,
+    comingSoon: false,
+  },
+  {
+    id: "elevenlabs",
+    name: "ElevenLabs",
+    description: "AI voice synthesis for natural-sounding calls and audio",
+    icon: Mic,
+    color: "#000000",
+    capabilities: ["Text-to-Speech", "Voice Cloning", "Conversational AI", "Voice Agents"],
+    scopes: [
+      "Generate speech from text",
+      "Create voice agents",
+      "Access voice library",
+      "Real-time voice synthesis",
+    ],
+    docsUrl: "https://elevenlabs.io/docs",
+    category: "communication",
+    comingSoon: false,
   },
 
   // ============================================

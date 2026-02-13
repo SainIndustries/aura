@@ -6,6 +6,7 @@ import {
   boolean,
   jsonb,
   pgEnum,
+  integer,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
@@ -40,6 +41,7 @@ export const channelTypeEnum = pgEnum("channel_type", [
   "whatsapp",
   "discord",
   "email",
+  "phone",
 ]);
 
 export const auditLogCategoryEnum = pgEnum("audit_log_category", [
@@ -207,6 +209,25 @@ export const integrations = pgTable("integrations", {
     .notNull(),
 });
 
+export const voiceSettings = pgTable("voice_settings", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id")
+    .references(() => users.id, { onDelete: "cascade" })
+    .notNull(),
+  agentId: uuid("agent_id").references(() => agents.id, { onDelete: "cascade" }),
+  elevenlabsVoiceId: text("elevenlabs_voice_id"),
+  elevenlabsModelId: text("elevenlabs_model_id"),
+  twilioPhoneNumber: text("twilio_phone_number"),
+  callHandlingEnabled: boolean("call_handling_enabled").default(false),
+  voicemailEnabled: boolean("voicemail_enabled").default(true),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});
+
 export const agentInstances = pgTable("agent_instances", {
   id: uuid("id").defaultRandom().primaryKey(),
   agentId: uuid("agent_id")
@@ -258,6 +279,17 @@ export const agentsRelations = relations(agents, ({ one, many }) => ({
 export const agentInstancesRelations = relations(agentInstances, ({ one }) => ({
   agent: one(agents, {
     fields: [agentInstances.agentId],
+    references: [agents.id],
+  }),
+}));
+
+export const voiceSettingsRelations = relations(voiceSettings, ({ one }) => ({
+  user: one(users, {
+    fields: [voiceSettings.userId],
+    references: [users.id],
+  }),
+  agent: one(agents, {
+    fields: [voiceSettings.agentId],
     references: [agents.id],
   }),
 }));
@@ -349,5 +381,44 @@ export const teamInvitesRelations = relations(teamInvites, ({ one }) => ({
   workspaceOwner: one(users, {
     fields: [teamInvites.workspaceOwnerId],
     references: [users.id],
+  }),
+}));
+
+// Call Logs for Phone Channel
+export const callLogs = pgTable("call_logs", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id")
+    .references(() => users.id, { onDelete: "cascade" })
+    .notNull(),
+  agentId: uuid("agent_id").references(() => agents.id, { onDelete: "set null" }),
+  channelId: uuid("channel_id").references(() => channels.id, { onDelete: "set null" }),
+  twilioCallSid: text("twilio_call_sid").notNull(),
+  direction: text("direction").notNull(), // "inbound" | "outbound"
+  fromNumber: text("from_number").notNull(),
+  toNumber: text("to_number").notNull(),
+  status: text("status").notNull(), // "queued", "ringing", "in-progress", "completed", "failed", "busy", "no-answer"
+  duration: integer("duration"), // seconds
+  recordingUrl: text("recording_url"),
+  recordingSid: text("recording_sid"),
+  transcription: text("transcription"),
+  metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+  endedAt: timestamp("ended_at", { withTimezone: true }),
+});
+
+export const callLogsRelations = relations(callLogs, ({ one }) => ({
+  user: one(users, {
+    fields: [callLogs.userId],
+    references: [users.id],
+  }),
+  agent: one(agents, {
+    fields: [callLogs.agentId],
+    references: [agents.id],
+  }),
+  channel: one(channels, {
+    fields: [callLogs.channelId],
+    references: [channels.id],
   }),
 }));

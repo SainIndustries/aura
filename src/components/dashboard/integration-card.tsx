@@ -8,11 +8,14 @@ import { IntegrationDetail } from "./integration-detail";
 import type { IntegrationProvider } from "@/lib/integrations/providers";
 import { Clock } from "lucide-react";
 
+// Providers that use API key authentication
+const API_KEY_PROVIDERS = ["elevenlabs", "twilio"];
+
 interface IntegrationCardProps {
   provider: IntegrationProvider;
   isConnected: boolean;
   connectedAt?: Date | null;
-  onConnect: () => Promise<void>;
+  onConnect: (credentials?: Record<string, string>) => Promise<void>;
   onDisconnect: () => Promise<void>;
 }
 
@@ -26,11 +29,14 @@ export function IntegrationCard({
   const [showDetail, setShowDetail] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleConnect = async () => {
+  const isApiKeyProvider = API_KEY_PROVIDERS.includes(provider.id);
+
+  const handleConnect = async (credentials?: Record<string, string>) => {
     if (provider.comingSoon) return;
     setIsLoading(true);
     try {
-      await onConnect();
+      await onConnect(credentials);
+      setShowDetail(false);
     } finally {
       setIsLoading(false);
     }
@@ -43,6 +49,16 @@ export function IntegrationCard({
     } finally {
       setIsLoading(false);
       setShowDetail(false);
+    }
+  };
+
+  const handleQuickConnect = () => {
+    // For API key providers, always show the detail modal
+    if (isApiKeyProvider) {
+      setShowDetail(true);
+    } else {
+      // For OAuth providers, trigger OAuth flow directly
+      handleConnect();
     }
   };
 
@@ -136,7 +152,7 @@ export function IntegrationCard({
                   if (isConnected) {
                     setShowDetail(true);
                   } else {
-                    handleConnect();
+                    handleQuickConnect();
                   }
                 }}
                 disabled={isLoading}

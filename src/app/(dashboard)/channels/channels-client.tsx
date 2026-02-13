@@ -8,7 +8,7 @@ import { ChannelConfigModal } from "@/components/dashboard/channel-config-modal"
 
 interface Channel {
   id: string;
-  type: "web" | "slack" | "telegram" | "whatsapp" | "discord" | "email";
+  type: "web" | "slack" | "telegram" | "whatsapp" | "discord" | "email" | "phone";
   name: string;
   enabled: boolean | null;
   config: Record<string, unknown> | null;
@@ -26,19 +26,21 @@ interface ChannelsClientProps {
   agents: Agent[];
 }
 
-const channelInfo: Record<ChannelType, { name: string; description: string; comingSoon?: boolean }> = {
+const channelInfo: Record<ChannelType, { name: string; description: string; comingSoon?: boolean; requiresIntegrations?: string[] }> = {
   web: { name: "Web Chat", description: "Embed a chat widget on your website" },
   slack: { name: "Slack", description: "Connect to your Slack workspace" },
   telegram: { name: "Telegram", description: "Connect a Telegram bot" },
   whatsapp: { name: "WhatsApp", description: "Connect WhatsApp Business", comingSoon: true },
   discord: { name: "Discord", description: "Connect a Discord bot", comingSoon: true },
   email: { name: "Email", description: "Respond to incoming emails", comingSoon: true },
+  phone: { name: "Phone", description: "Inbound and outbound voice calls", requiresIntegrations: ["twilio", "elevenlabs"] },
 };
 
 const availableChannels: ChannelType[] = [
   "web",
   "slack",
   "telegram",
+  "phone",
   "whatsapp",
   "discord",
   "email",

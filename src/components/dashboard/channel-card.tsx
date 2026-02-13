@@ -15,7 +15,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
-export type ChannelType = "web" | "slack" | "telegram" | "whatsapp" | "discord" | "email";
+export type ChannelType = "web" | "slack" | "telegram" | "whatsapp" | "discord" | "email" | "phone";
 
 export interface ChannelCardProps {
   type: ChannelType;
@@ -30,9 +30,10 @@ const channelIcons: Record<ChannelType, React.ComponentType<{ className?: string
   web: Globe,
   slack: Slack,
   telegram: MessageCircle,
-  whatsapp: Phone,
+  whatsapp: MessageCircle,
   discord: Hash,
   email: Mail,
+  phone: Phone,
 };
 
 const channelColors: Record<ChannelType, string> = {
@@ -42,6 +43,7 @@ const channelColors: Record<ChannelType, string> = {
   whatsapp: "bg-[#25D366]/20 text-[#25D366]",
   discord: "bg-[#5865F2]/20 text-[#5865F2]",
   email: "bg-amber-500/20 text-amber-500",
+  phone: "bg-[#F22F46]/20 text-[#F22F46]",
 };
 
 const statusConfig = {

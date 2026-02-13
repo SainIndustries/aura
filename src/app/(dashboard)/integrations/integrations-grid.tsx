@@ -25,11 +25,16 @@ import { Button } from "@/components/ui/button";
 // Providers that use OAuth flow
 const OAUTH_PROVIDERS = ["google", "slack", "github"];
 
+// Providers that use API key authentication
+const API_KEY_PROVIDERS = ["elevenlabs", "twilio"];
+
 // Provider display names for toast messages
 const PROVIDER_NAMES: Record<string, string> = {
   google: "Google Workspace",
   slack: "Slack",
   github: "GitHub",
+  elevenlabs: "ElevenLabs",
+  twilio: "Twilio",
 };
 
 interface IntegrationsGridProps {
@@ -93,10 +98,42 @@ export function IntegrationsGrid({ connectionMap }: IntegrationsGridProps) {
     }
   }, [searchParams, router]);
 
-  const handleConnect = async (providerId: string) => {
+  const handleConnect = async (
+    providerId: string,
+    credentials?: Record<string, string>
+  ) => {
     // For OAuth providers, redirect to the OAuth flow
     if (OAUTH_PROVIDERS.includes(providerId)) {
       window.location.href = `/api/integrations/${providerId}`;
+      return;
+    }
+
+    // For API key providers, call the specific API endpoint
+    if (API_KEY_PROVIDERS.includes(providerId)) {
+      try {
+        const response = await fetch(`/api/integrations/${providerId}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(credentials),
+        });
+
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.error || "Failed to connect integration");
+        }
+
+        toast.success(`${PROVIDER_NAMES[providerId] || providerId} connected successfully!`);
+        startTransition(() => {
+          router.refresh();
+        });
+      } catch (error) {
+        toast.error(
+          error instanceof Error ? error.message : "Failed to connect integration"
+        );
+        throw error;
+      }
       return;
     }
 
@@ -296,7 +333,7 @@ export function IntegrationsGrid({ connectionMap }: IntegrationsGridProps) {
                     provider={provider}
                     isConnected={!!connection}
                     connectedAt={connection?.connectedAt}
-                    onConnect={() => handleConnect(provider.id)}
+                    onConnect={(credentials) => handleConnect(provider.id, credentials)}
                     onDisconnect={() => handleDisconnect(provider.id)}
                   />
                 );
