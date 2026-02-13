@@ -121,7 +121,7 @@ export const integrationProviders: IntegrationProvider[] = [
     ],
     docsUrl: "https://docs.microsoft.com/en-us/graph/teams-concept-overview",
     category: "communication",
-    comingSoon: true,
+    comingSoon: false,
   },
   {
     id: "discord",
@@ -662,7 +662,7 @@ export const integrationProviders: IntegrationProvider[] = [
     ],
     docsUrl: "https://docs.datadoghq.com/api/",
     category: "development",
-    comingSoon: true,
+    comingSoon: false,
   },
   {
     id: "pagerduty",
@@ -679,7 +679,7 @@ export const integrationProviders: IntegrationProvider[] = [
     ],
     docsUrl: "https://developer.pagerduty.com",
     category: "development",
-    comingSoon: true,
+    comingSoon: false,
   },
   {
     id: "sentry",
@@ -696,7 +696,7 @@ export const integrationProviders: IntegrationProvider[] = [
     ],
     docsUrl: "https://docs.sentry.io/api/",
     category: "development",
-    comingSoon: true,
+    comingSoon: false,
   },
   {
     id: "new-relic",
@@ -874,7 +874,7 @@ export const integrationProviders: IntegrationProvider[] = [
     ],
     docsUrl: "https://stripe.com/docs/api",
     category: "finance",
-    comingSoon: true,
+    comingSoon: false,
   },
   {
     id: "quickbooks",
@@ -1107,7 +1107,7 @@ export const integrationProviders: IntegrationProvider[] = [
     ],
     docsUrl: "https://developer.zendesk.com",
     category: "support",
-    comingSoon: true,
+    comingSoon: false,
   },
   {
     id: "freshdesk",
