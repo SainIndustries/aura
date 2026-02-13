@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { IntegrationDetail } from "./integration-detail";
 import type { IntegrationProvider } from "@/lib/integrations/providers";
+import { Clock } from "lucide-react";
 
 interface IntegrationCardProps {
   provider: IntegrationProvider;
@@ -26,6 +27,7 @@ export function IntegrationCard({
   const [isLoading, setIsLoading] = useState(false);
 
   const handleConnect = async () => {
+    if (provider.comingSoon) return;
     setIsLoading(true);
     try {
       await onConnect();
@@ -49,14 +51,18 @@ export function IntegrationCard({
   return (
     <>
       <Card
-        className="group cursor-pointer border-[rgba(255,255,255,0.05)] bg-aura-surface transition-all hover:border-[rgba(79,143,255,0.12)]"
-        onClick={() => setShowDetail(true)}
+        className={`group cursor-pointer border-[rgba(255,255,255,0.05)] bg-aura-surface transition-all hover:border-[rgba(79,143,255,0.12)] ${
+          provider.comingSoon ? "opacity-75" : ""
+        }`}
+        onClick={() => !provider.comingSoon && setShowDetail(true)}
       >
         <CardContent className="pt-6">
           <div className="flex items-start justify-between">
             <div className="flex items-center gap-4">
               <div
-                className="flex h-12 w-12 items-center justify-center rounded-xl"
+                className={`flex h-12 w-12 items-center justify-center rounded-xl ${
+                  provider.comingSoon ? "grayscale-[30%]" : ""
+                }`}
                 style={{ backgroundColor: `${provider.color}15` }}
               >
                 <Icon
@@ -68,21 +74,31 @@ export function IntegrationCard({
                 <h3 className="font-semibold text-aura-text-white">
                   {provider.name}
                 </h3>
-                <p className="mt-0.5 text-sm text-aura-text-dim">
+                <p className="mt-0.5 text-sm text-aura-text-dim line-clamp-1">
                   {provider.description}
                 </p>
               </div>
             </div>
-            <Badge
-              variant="secondary"
-              className={
-                isConnected
-                  ? "bg-aura-mint/20 text-aura-mint"
-                  : "bg-aura-text-dim/20 text-aura-text-dim"
-              }
-            >
-              {isConnected ? "Connected" : "Not Connected"}
-            </Badge>
+            {provider.comingSoon ? (
+              <Badge
+                variant="secondary"
+                className="bg-aura-accent/20 text-aura-accent shrink-0"
+              >
+                <Clock className="mr-1 h-3 w-3" />
+                Soon
+              </Badge>
+            ) : (
+              <Badge
+                variant="secondary"
+                className={`shrink-0 ${
+                  isConnected
+                    ? "bg-aura-mint/20 text-aura-mint"
+                    : "bg-aura-text-dim/20 text-aura-text-dim"
+                }`}
+              >
+                {isConnected ? "Connected" : "Available"}
+              </Badge>
+            )}
           </div>
 
           <div className="mt-4 flex items-center justify-between">
@@ -101,36 +117,49 @@ export function IntegrationCard({
                 </span>
               )}
             </div>
-            <Button
-              variant={isConnected ? "outline" : "default"}
-              size="sm"
-              className="opacity-0 transition-opacity group-hover:opacity-100"
-              onClick={(e) => {
-                e.stopPropagation();
-                if (isConnected) {
-                  setShowDetail(true);
-                } else {
-                  handleConnect();
-                }
-              }}
-              disabled={isLoading}
-            >
-              {isConnected ? "Manage" : "Connect"}
-            </Button>
+            {provider.comingSoon ? (
+              <Button
+                variant="outline"
+                size="sm"
+                className="opacity-0 transition-opacity group-hover:opacity-100 cursor-not-allowed"
+                disabled
+              >
+                Coming Soon
+              </Button>
+            ) : (
+              <Button
+                variant={isConnected ? "outline" : "default"}
+                size="sm"
+                className="opacity-0 transition-opacity group-hover:opacity-100"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (isConnected) {
+                    setShowDetail(true);
+                  } else {
+                    handleConnect();
+                  }
+                }}
+                disabled={isLoading}
+              >
+                {isConnected ? "Manage" : "Connect"}
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
 
-      <IntegrationDetail
-        provider={provider}
-        isConnected={isConnected}
-        connectedAt={connectedAt}
-        open={showDetail}
-        onOpenChange={setShowDetail}
-        onConnect={handleConnect}
-        onDisconnect={handleDisconnect}
-        isLoading={isLoading}
-      />
+      {!provider.comingSoon && (
+        <IntegrationDetail
+          provider={provider}
+          isConnected={isConnected}
+          connectedAt={connectedAt}
+          open={showDetail}
+          onOpenChange={setShowDetail}
+          onConnect={handleConnect}
+          onDisconnect={handleDisconnect}
+          isLoading={isLoading}
+        />
+      )}
     </>
   );
 }

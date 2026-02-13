@@ -1,24 +1,57 @@
 "use client";
 
-import { useTransition } from "react";
+import { useTransition, useState } from "react";
 import { useRouter } from "next/navigation";
 import { IntegrationCard } from "@/components/dashboard/integration-card";
-import { integrationProviders } from "@/lib/integrations/providers";
+import {
+  integrationProviders,
+  categoryMeta,
+  type IntegrationCategory,
+  type IntegrationProvider,
+} from "@/lib/integrations/providers";
 import { connectIntegration, disconnectIntegration } from "./actions";
 import { toast } from "sonner";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Search, Filter, ChevronDown } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuCheckboxItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Button } from "@/components/ui/button";
 
 interface IntegrationsGridProps {
   connectionMap: Map<string, { connectedAt: Date | null; id: string }>;
 }
 
+const categoryOrder: IntegrationCategory[] = [
+  "communication",
+  "email",
+  "crm",
+  "project",
+  "development",
+  "documentation",
+  "finance",
+  "hr",
+  "analytics",
+  "support",
+  "marketing",
+  "security",
+];
+
 export function IntegrationsGrid({ connectionMap }: IntegrationsGridProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCategories, setSelectedCategories] = useState<Set<IntegrationCategory>>(
+    new Set()
+  );
+  const [showComingSoon, setShowComingSoon] = useState(true);
 
   const handleConnect = async (providerId: string) => {
     try {
-      // In a real implementation, this would redirect to OAuth
-      // For now, we'll simulate a connection
       await connectIntegration(providerId);
       toast.success("Integration connected successfully");
       startTransition(() => {
@@ -47,54 +80,199 @@ export function IntegrationsGrid({ connectionMap }: IntegrationsGridProps) {
     }
   };
 
-  // Group providers by category
-  const categories = {
-    productivity: integrationProviders.filter(
-      (p) => p.category === "productivity"
-    ),
-    communication: integrationProviders.filter(
-      (p) => p.category === "communication"
-    ),
-    development: integrationProviders.filter(
-      (p) => p.category === "development"
-    ),
-    crm: integrationProviders.filter((p) => p.category === "crm"),
+  // Filter providers based on search and category
+  const filteredProviders = integrationProviders.filter((provider) => {
+    const matchesSearch =
+      searchQuery === "" ||
+      provider.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      provider.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      provider.capabilities.some((cap) =>
+        cap.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+
+    const matchesCategory =
+      selectedCategories.size === 0 || selectedCategories.has(provider.category);
+
+    const matchesComingSoon = showComingSoon || !provider.comingSoon;
+
+    return matchesSearch && matchesCategory && matchesComingSoon;
+  });
+
+  // Group filtered providers by category
+  const categorizedProviders = categoryOrder.reduce(
+    (acc, category) => {
+      const providers = filteredProviders.filter((p) => p.category === category);
+      if (providers.length > 0) {
+        acc[category] = providers;
+      }
+      return acc;
+    },
+    {} as Record<IntegrationCategory, IntegrationProvider[]>
+  );
+
+  const toggleCategory = (category: IntegrationCategory) => {
+    const newCategories = new Set(selectedCategories);
+    if (newCategories.has(category)) {
+      newCategories.delete(category);
+    } else {
+      newCategories.add(category);
+    }
+    setSelectedCategories(newCategories);
   };
 
-  const categoryLabels: Record<string, string> = {
-    productivity: "Productivity",
-    communication: "Communication",
-    development: "Development",
-    crm: "CRM & Sales",
-  };
+  const availableCount = integrationProviders.filter((p) => !p.comingSoon).length;
+  const totalCount = integrationProviders.length;
 
   return (
-    <div className="space-y-8">
-      {Object.entries(categories).map(
-        ([category, providers]) =>
-          providers.length > 0 && (
-            <div key={category}>
-              <h2 className="mb-4 text-lg font-semibold text-aura-text-light">
-                {categoryLabels[category]}
-              </h2>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {providers.map((provider) => {
-                  const connection = connectionMap.get(provider.id);
-                  return (
-                    <IntegrationCard
-                      key={provider.id}
-                      provider={provider}
-                      isConnected={!!connection}
-                      connectedAt={connection?.connectedAt}
-                      onConnect={() => handleConnect(provider.id)}
-                      onDisconnect={() => handleDisconnect(provider.id)}
-                    />
-                  );
-                })}
-              </div>
-            </div>
-          )
+    <div className="space-y-6">
+      {/* Stats */}
+      <div className="flex items-center gap-4 text-sm text-aura-text-dim">
+        <span>
+          <span className="font-semibold text-aura-text-light">{totalCount}</span> integrations
+        </span>
+        <span>•</span>
+        <span>
+          <span className="font-semibold text-aura-mint">{availableCount}</span> available now
+        </span>
+        <span>•</span>
+        <span>
+          <span className="font-semibold text-aura-accent">{totalCount - availableCount}</span> coming soon
+        </span>
+      </div>
+
+      {/* Search and Filters */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-aura-text-dim" />
+          <Input
+            placeholder="Search integrations..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10 bg-aura-surface border-[rgba(255,255,255,0.05)]"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                className="border-[rgba(255,255,255,0.05)] bg-aura-surface"
+              >
+                <Filter className="mr-2 h-4 w-4" />
+                Categories
+                {selectedCategories.size > 0 && (
+                  <Badge
+                    variant="secondary"
+                    className="ml-2 bg-aura-accent/20 text-aura-accent"
+                  >
+                    {selectedCategories.size}
+                  </Badge>
+                )}
+                <ChevronDown className="ml-2 h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="end"
+              className="w-56 bg-aura-surface border-[rgba(255,255,255,0.05)]"
+            >
+              {categoryOrder.map((category) => (
+                <DropdownMenuCheckboxItem
+                  key={category}
+                  checked={selectedCategories.has(category)}
+                  onCheckedChange={() => toggleCategory(category)}
+                >
+                  {categoryMeta[category].label}
+                </DropdownMenuCheckboxItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <Button
+            variant={showComingSoon ? "default" : "outline"}
+            size="sm"
+            onClick={() => setShowComingSoon(!showComingSoon)}
+            className={
+              showComingSoon
+                ? "bg-aura-accent/20 text-aura-accent hover:bg-aura-accent/30"
+                : "border-[rgba(255,255,255,0.05)] bg-aura-surface"
+            }
+          >
+            Coming Soon
+          </Button>
+        </div>
+      </div>
+
+      {/* Selected category badges */}
+      {selectedCategories.size > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {Array.from(selectedCategories).map((category) => (
+            <Badge
+              key={category}
+              variant="secondary"
+              className="cursor-pointer bg-aura-accent/20 text-aura-accent hover:bg-aura-accent/30"
+              onClick={() => toggleCategory(category)}
+            >
+              {categoryMeta[category].label}
+              <span className="ml-1">×</span>
+            </Badge>
+          ))}
+          <button
+            className="text-sm text-aura-text-dim hover:text-aura-text-light"
+            onClick={() => setSelectedCategories(new Set())}
+          >
+            Clear all
+          </button>
+        </div>
       )}
+
+      {/* Integration Categories */}
+      <div className="space-y-10">
+        {Object.entries(categorizedProviders).map(([category, providers]) => (
+          <div key={category}>
+            <div className="mb-4">
+              <h2 className="text-lg font-semibold text-aura-text-light">
+                {categoryMeta[category as IntegrationCategory].label}
+              </h2>
+              <p className="text-sm text-aura-text-dim">
+                {categoryMeta[category as IntegrationCategory].description}
+              </p>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {providers.map((provider) => {
+                const connection = connectionMap.get(provider.id);
+                return (
+                  <IntegrationCard
+                    key={provider.id}
+                    provider={provider}
+                    isConnected={!!connection}
+                    connectedAt={connection?.connectedAt}
+                    onConnect={() => handleConnect(provider.id)}
+                    onDisconnect={() => handleDisconnect(provider.id)}
+                  />
+                );
+              })}
+            </div>
+          </div>
+        ))}
+
+        {Object.keys(categorizedProviders).length === 0 && (
+          <div className="py-12 text-center">
+            <p className="text-aura-text-dim">
+              No integrations found matching your criteria.
+            </p>
+            <button
+              className="mt-2 text-sm text-aura-accent hover:underline"
+              onClick={() => {
+                setSearchQuery("");
+                setSelectedCategories(new Set());
+                setShowComingSoon(true);
+              }}
+            >
+              Clear filters
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
