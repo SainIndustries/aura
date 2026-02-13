@@ -422,3 +422,25 @@ export const callLogsRelations = relations(callLogs, ({ one }) => ({
     references: [channels.id],
   }),
 }));
+
+// Waitlist enum for deployment preference
+export const deploymentPreferenceEnum = pgEnum("deployment_preference", [
+  "cloud",
+  "local",
+  "undecided",
+]);
+
+// Waitlist
+export const waitlist = pgTable("waitlist", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  email: text("email").notNull().unique(),
+  useCase: text("use_case").notNull(),
+  city: text("city").notNull(),
+  deploymentPreference: deploymentPreferenceEnum("deployment_preference").notNull().default("undecided"),
+  company: text("company"),
+  notes: text("notes"),
+  contacted: boolean("contacted").default(false),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});

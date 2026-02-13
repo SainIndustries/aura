@@ -15,6 +15,13 @@
       "when": 1770976436252,
       "tag": "0001_cultured_blackheart",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1771001258229,
+      "tag": "0002_eager_swarm",
+      "breakpoints": true
     }
   ]
 }
