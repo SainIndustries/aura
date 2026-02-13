@@ -10,28 +10,28 @@ See: .planning/PROJECT.md (updated 2026-02-13)
 ## Current Position
 
 Phase: 6 of 10 (Async Pipeline Foundation)
-Plan: None yet (phase planning pending)
-Status: Ready to plan
-Last activity: 2026-02-13 — Roadmap created for milestone v1.1
+Plan: 1 of 3 completed
+Status: In progress
+Last activity: 2026-02-13 — Completed plan 06-01: Database schema and job queue operations
 
-Progress: [░░░░░░░░░░] 0% (v1.1 phases)
+Progress: [█░░░░░░░░░] 10% (v1.1 phases - 1 of 10 plans complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 0 (v1.1 starting fresh)
-- Average duration: TBD
-- Total execution time: 0 hours
+- Total plans completed: 1
+- Average duration: 3.2 minutes
+- Total execution time: 0.05 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| - | - | - | - |
+| 06    | 1     | 193s  | 193s     |
 
 **Recent Trend:**
-- Last 5 plans: TBD
-- Trend: Not yet established
+- Last 5 plans: 06-01 (193s)
+- Trend: Establishing baseline
 
 *Updated after each plan completion*
 
@@ -47,6 +47,10 @@ Recent decisions affecting current work:
 - v1.1 Initialization: openclaw-ansible needs localhost→remote adaptation
 - v1.1 Initialization: Tailscale uses OAuth client for ephemeral auth keys (not static keys)
 - v1.1 Initialization: Long operations MUST run in GitHub Actions (Vercel 10-60s timeout)
+- Phase 06 Plan 01: Max retries = 3 for provisioning jobs
+- Phase 06 Plan 01: Job timeout threshold = 15 minutes (900s)
+- Phase 06 Plan 01: Heartbeat interval = 60s (matches GitHub Actions)
+- Phase 06 Plan 01: On-demand timeout detection (no background cron)
 
 ### Pending Todos
 
@@ -73,5 +77,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-13
-Stopped at: Roadmap and STATE.md created for milestone v1.1
-Resume file: None
+Stopped at: Completed Phase 06 Plan 01 - Database schema and job queue operations
+Resume file: .planning/phases/06-async-pipeline-foundation/06-01-SUMMARY.md
