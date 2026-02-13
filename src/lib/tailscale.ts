@@ -185,3 +185,79 @@ export async function verifyEnrollment(
     `[Tailscale] Enrollment timeout for ${hostname} after ${maxRetries * intervalMs}ms`
   );
 }
+
+/**
+ * List all devices in the Tailscale network
+ * @returns Promise<TailscaleDevice[]>
+ * @throws Error if device list fetch fails
+ */
+export async function listDevices(): Promise<TailscaleDevice[]> {
+  const tokenResponse = await getOAuthToken();
+  const accessToken = tokenResponse.access_token;
+
+  const url = "https://api.tailscale.com/api/v2/tailnet/-/devices";
+
+  const response = await fetch(url, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      `[Tailscale] Device list fetch failed: ${response.status} ${JSON.stringify(data)}`
+    );
+  }
+
+  return data.devices as TailscaleDevice[];
+}
+
+/**
+ * Delete a device from the Tailscale network
+ * Idempotent: 404 responses are treated as success
+ * @param deviceId - The device ID to delete
+ * @throws Error if deletion fails (non-404 errors)
+ */
+export async function deleteDevice(deviceId: string): Promise<void> {
+  const tokenResponse = await getOAuthToken();
+  const accessToken = tokenResponse.access_token;
+
+  const url = `https://api.tailscale.com/api/v2/device/${deviceId}`;
+
+  const response = await fetch(url, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  // Idempotent: 404 means device already deleted
+  if (response.status === 404) {
+    console.log(`[Tailscale] Device ${deviceId} already deleted (404)`);
+    return;
+  }
+
+  if (!response.ok) {
+    const data = await response.json();
+    throw new Error(
+      `[Tailscale] Device ${deviceId} deletion failed: ${response.status} ${JSON.stringify(data)}`
+    );
+  }
+
+  console.log(`[Tailscale] Device ${deviceId} deleted from network`);
+}
+
+/**
+ * Find a device by its Tailscale IP address
+ * @param tailscaleIp - The Tailscale IP to search for
+ * @returns Promise<TailscaleDevice | undefined>
+ */
+export async function findDeviceByIp(
+  tailscaleIp: string
+): Promise<TailscaleDevice | undefined> {
+  const devices = await listDevices();
+  return devices.find((d) => d.addresses.includes(tailscaleIp));
+}

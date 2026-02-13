@@ -212,8 +212,9 @@ export async function waitForAction(
 
 /**
  * Delete a Hetzner Cloud server
+ * Idempotent: 404 responses are treated as success
  * @param serverId - The server ID to delete
- * @throws Error if deletion fails
+ * @throws Error if deletion fails (non-404 errors)
  */
 export async function deleteServer(serverId: number): Promise<void> {
   const { token } = getHetznerConfig();
@@ -227,6 +228,12 @@ export async function deleteServer(serverId: number): Promise<void> {
     },
   });
 
+  // Idempotent: 404 means server already deleted
+  if (response.status === 404) {
+    console.log(`[Hetzner] Server ${serverId} already deleted (404)`);
+    return;
+  }
+
   if (!response.ok) {
     const data = await response.json();
     const errorCode = data.error?.code || "unknown";
@@ -237,4 +244,113 @@ export async function deleteServer(serverId: number): Promise<void> {
   }
 
   console.log(`[Hetzner] Server ${serverId} deleted successfully`);
+}
+
+/**
+ * Gracefully shutdown a Hetzner Cloud server via ACPI
+ * Falls back to forced poweroff on timeout
+ * @param serverId - The server ID to shutdown
+ * @throws Error if shutdown fails
+ */
+export async function shutdownServer(serverId: number): Promise<void> {
+  const { token } = getHetznerConfig();
+
+  const url = `https://api.hetzner.cloud/v1/servers/${serverId}/actions/shutdown`;
+
+  const response = await fetchWithRateLimit(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    const errorCode = data.error?.code || "unknown";
+    const errorMessage = data.error?.message || response.statusText;
+    throw new Error(
+      `[Hetzner] Server ${serverId} shutdown failed: ${errorCode} - ${errorMessage}`
+    );
+  }
+
+  const action = data.action as HetznerAction;
+
+  try {
+    // Wait up to 60 seconds for graceful shutdown
+    await waitForAction(action.id, { maxRetries: 60, intervalMs: 1000 });
+    console.log(`[Hetzner] Server ${serverId} shut down gracefully`);
+  } catch (error) {
+    console.warn(
+      `[Hetzner] Graceful shutdown timeout for server ${serverId}, falling back to forced poweroff`
+    );
+    await powerOffServer(serverId);
+  }
+}
+
+/**
+ * Power on a Hetzner Cloud server
+ * @param serverId - The server ID to power on
+ * @throws Error if power on fails
+ */
+export async function powerOnServer(serverId: number): Promise<void> {
+  const { token } = getHetznerConfig();
+
+  const url = `https://api.hetzner.cloud/v1/servers/${serverId}/actions/poweron`;
+
+  const response = await fetchWithRateLimit(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    const errorCode = data.error?.code || "unknown";
+    const errorMessage = data.error?.message || response.statusText;
+    throw new Error(
+      `[Hetzner] Server ${serverId} power on failed: ${errorCode} - ${errorMessage}`
+    );
+  }
+
+  const action = data.action as HetznerAction;
+  await waitForAction(action.id);
+
+  console.log(`[Hetzner] Server ${serverId} powered on`);
+}
+
+/**
+ * Forcefully power off a Hetzner Cloud server
+ * WARNING: This may cause data loss. Use shutdownServer() for graceful shutdown.
+ * @param serverId - The server ID to power off
+ * @throws Error if power off fails
+ */
+export async function powerOffServer(serverId: number): Promise<void> {
+  const { token } = getHetznerConfig();
+
+  const url = `https://api.hetzner.cloud/v1/servers/${serverId}/actions/poweroff`;
+
+  const response = await fetchWithRateLimit(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    const errorCode = data.error?.code || "unknown";
+    const errorMessage = data.error?.message || response.statusText;
+    throw new Error(
+      `[Hetzner] Server ${serverId} power off failed: ${errorCode} - ${errorMessage}`
+    );
+  }
+
+  const action = data.action as HetznerAction;
+  await waitForAction(action.id);
+
+  console.log(`[Hetzner] Server ${serverId} forced power off`);
 }
