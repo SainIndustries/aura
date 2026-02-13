@@ -190,8 +190,8 @@ describe('Team API Routes', () => {
       vi.mocked(getCurrentUser).mockResolvedValue(mockUser as any)
 
       const { db } = await import('@/lib/db')
-      vi.mocked(db.query.users.findFirst).mockResolvedValue(null)
-      vi.mocked(db.query.teamInvites.findFirst).mockResolvedValue(null)
+      vi.mocked(db.query.users.findFirst).mockResolvedValue(undefined)
+      vi.mocked(db.query.teamInvites.findFirst).mockResolvedValue(undefined)
 
       const mockInvite = createMockTeamInvite({
         email: 'newmember@example.com',
