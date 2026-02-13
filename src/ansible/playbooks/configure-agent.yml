@@ -1,0 +1,251 @@
+---
+- name: Configure OpenClaw Agent on Remote VM
+  hosts: all
+  become: yes
+  gather_facts: no
+
+  handlers:
+    - name: reload systemd
+      ansible.builtin.systemd:
+        daemon_reload: yes
+
+  tasks:
+    # Stage 1: Wait for SSH connection
+    - name: Wait for system to be reachable via SSH
+      ansible.builtin.wait_for_connection:
+        delay: 10
+        timeout: 300
+        sleep: 5
+
+    # Stage 2: Wait for cloud-init completion
+    - name: Wait for cloud-init to complete
+      community.general.cloud_init_data_facts:
+      register: cloud_init_status
+      until: >
+        cloud_init_status.cloud_init_data_facts is defined and
+        cloud_init_status.cloud_init_data_facts.status.v1.stage is defined and
+        cloud_init_status.cloud_init_data_facts.status.v1.stage == ''
+      retries: 60
+      delay: 10
+
+    # Stage 3: Gather system facts
+    - name: Gather system facts
+      ansible.builtin.setup:
+
+    # Stage 4: Verify Tailscale is running
+    - name: Verify Tailscale is running
+      ansible.builtin.command: tailscale status
+      register: tailscale_status_result
+      changed_when: false
+      failed_when: tailscale_status_result.rc != 0
+
+    - name: Display Tailscale status
+      ansible.builtin.debug:
+        msg: "Tailscale is running and enrolled"
+      when: tailscale_status_result.rc == 0
+
+    # Stage 5: Install Docker
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: yes
+      retries: 3
+      delay: 30
+      register: apt_update_result
+      until: apt_update_result is succeeded
+
+    - name: Install Docker and Docker Compose
+      ansible.builtin.apt:
+        name:
+          - docker.io
+          - docker-compose-v2
+        state: present
+      retries: 3
+      delay: 30
+      register: docker_install_result
+      until: docker_install_result is succeeded
+
+    - name: Ensure Docker service is started and enabled
+      ansible.builtin.systemd_service:
+        name: docker
+        state: started
+        enabled: yes
+
+    # Stage 6: Install Node.js 20
+    - name: Download NodeSource setup script
+      ansible.builtin.shell: curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+      args:
+        creates: /etc/apt/sources.list.d/nodesource.list
+
+    - name: Install Node.js
+      ansible.builtin.apt:
+        name: nodejs
+        state: present
+      retries: 3
+      delay: 30
+      register: nodejs_install_result
+      until: nodejs_install_result is succeeded
+
+    # Stage 7: Create openclaw system user
+    - name: Create openclaw system user
+      ansible.builtin.user:
+        name: openclaw
+        system: yes
+        shell: /usr/sbin/nologin
+        home: /opt/openclaw
+        create_home: yes
+        groups: docker
+        append: yes
+
+    # Stage 8: Create agent configuration directory
+    - name: Create agent configuration directory
+      ansible.builtin.file:
+        path: /opt/openclaw/config
+        state: directory
+        owner: openclaw
+        group: openclaw
+        mode: '0755'
+
+    # Stage 9: Create agent environment file
+    - name: Create agent environment file
+      ansible.builtin.copy:
+        content: |
+          AGENT_ID={{ agent_id }}
+          SERVER_NAME={{ server_name }}
+          API_URL=https://api.aura.example.com
+        dest: /opt/openclaw/config/agent.env
+        owner: openclaw
+        group: openclaw
+        mode: '0600'
+
+    # Stage 10: Create systemd service file
+    - name: Create openclaw-agent systemd service
+      ansible.builtin.copy:
+        content: |
+          [Unit]
+          Description=OpenClaw Agent Service
+          After=network-online.target docker.service
+          Wants=network-online.target
+          Requires=docker.service
+
+          [Service]
+          Type=simple
+          User=openclaw
+          EnvironmentFile=/opt/openclaw/config/agent.env
+          ExecStart=/usr/bin/node /opt/openclaw/agent/index.js
+          Restart=always
+          RestartSec=10
+          StandardOutput=journal
+          StandardError=journal
+          SyslogIdentifier=openclaw-agent
+
+          [Install]
+          WantedBy=multi-user.target
+        dest: /etc/systemd/system/openclaw-agent.service
+        owner: root
+        group: root
+        mode: '0644'
+      notify: reload systemd
+
+    # Stage 11: Enable agent service (start will fail since agent binary doesn't exist yet)
+    - name: Enable openclaw-agent service
+      ansible.builtin.systemd_service:
+        name: openclaw-agent
+        enabled: yes
+        state: started
+      register: agent_service_result
+      failed_when: false
+
+    - name: Display agent service status
+      ansible.builtin.debug:
+        msg: "Agent service enabled. Start status: {{ agent_service_result.status.ActiveState | default('pending agent deployment') }}"
+
+    # Stage 12: Security hardening - Install UFW
+    - name: Install UFW
+      ansible.builtin.apt:
+        name: ufw
+        state: present
+      retries: 3
+      delay: 30
+      register: ufw_install_result
+      until: ufw_install_result is succeeded
+
+    - name: Configure UFW - deny incoming by default
+      ansible.builtin.ufw:
+        direction: incoming
+        policy: deny
+
+    - name: Configure UFW - allow outgoing by default
+      ansible.builtin.ufw:
+        direction: outgoing
+        policy: allow
+
+    - name: Configure UFW - allow SSH
+      ansible.builtin.ufw:
+        rule: allow
+        port: '22'
+        proto: tcp
+
+    - name: Configure UFW - allow Tailscale
+      ansible.builtin.ufw:
+        rule: allow
+        port: '41641'
+        proto: udp
+
+    - name: Enable UFW
+      ansible.builtin.ufw:
+        state: enabled
+
+    # Stage 13: Security hardening - Install fail2ban
+    - name: Install fail2ban
+      ansible.builtin.apt:
+        name: fail2ban
+        state: present
+      retries: 3
+      delay: 30
+      register: fail2ban_install_result
+      until: fail2ban_install_result is succeeded
+
+    - name: Ensure fail2ban service is started and enabled
+      ansible.builtin.systemd_service:
+        name: fail2ban
+        state: started
+        enabled: yes
+
+    # Stage 14: Final verification
+    - name: Get Tailscale status for verification
+      ansible.builtin.command: tailscale status --json
+      register: final_tailscale_status
+      changed_when: false
+      failed_when: false
+
+    - name: Get Docker version
+      ansible.builtin.command: docker --version
+      register: docker_version
+      changed_when: false
+
+    - name: Get Node.js version
+      ansible.builtin.command: node --version
+      register: node_version
+      changed_when: false
+
+    - name: Get UFW status
+      ansible.builtin.command: ufw status
+      register: ufw_status
+      changed_when: false
+
+    - name: Check if agent service unit exists
+      ansible.builtin.stat:
+        path: /etc/systemd/system/openclaw-agent.service
+      register: agent_service_file
+
+    - name: Display final verification summary
+      ansible.builtin.debug:
+        msg:
+          - "=== Configuration Summary ==="
+          - "Tailscale: Running (cloud-init installed)"
+          - "Docker: {{ docker_version.stdout }}"
+          - "Node.js: {{ node_version.stdout }}"
+          - "UFW: Enabled"
+          - "Agent service unit: {{ 'Exists' if agent_service_file.stat.exists else 'Missing' }}"
+          - "Agent service enabled: {{ agent_service_result.enabled | default(false) }}"
+          - "==========================="
