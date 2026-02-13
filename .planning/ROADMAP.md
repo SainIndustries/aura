@@ -77,22 +77,22 @@ Plans:
 Plans:
 - [x] 08-01-PLAN.md — Ansible playbook for remote VM configuration + GitHub Actions workflow integration
 
-#### Phase 9: Lifecycle Management
+#### ✅ Phase 9: Lifecycle Management (Complete — 2026-02-13)
 **Goal**: Users can control agent state and system handles subscription lifecycle
 **Depends on**: Phase 8
 **Requirements**: LIFE-01, LIFE-02, LIFE-03, LIFE-04, LIFE-05
 **Success Criteria** (what must be TRUE):
-  1. User can stop running agent from dashboard (VM shuts down, data preserved)
-  2. User can restart stopped agent from dashboard (VM starts, agent resumes)
-  3. System automatically destroys VM and removes Tailscale device when subscription is cancelled
-  4. System rolls back partial provisions on failure (deletes orphaned VMs automatically)
-  5. System suspends agent on payment failure without destroying data
+  1. ✓ User can stop running agent from dashboard (VM shuts down, data preserved)
+  2. ✓ User can restart stopped agent from dashboard (VM starts, agent resumes)
+  3. ✓ System automatically destroys VM and removes Tailscale device when subscription is cancelled
+  4. ✓ System rolls back partial provisions on failure (deletes orphaned VMs automatically)
+  5. ✓ System suspends agent on payment failure without destroying data
 **Plans**: 3 plans
 
 Plans:
-- [ ] 09-01-PLAN.md -- Hetzner power management + Tailscale device cleanup + lifecycle orchestrator module
-- [ ] 09-02-PLAN.md -- API routes (start/stop/destroy) + Stripe webhook lifecycle handlers + GitHub callback rollback
-- [ ] 09-03-PLAN.md -- Provision workflow rollback on failure (server_id in failure callback + VM cleanup step)
+- [x] 09-01-PLAN.md -- Hetzner power management + Tailscale device cleanup + lifecycle orchestrator module
+- [x] 09-02-PLAN.md -- API routes (start/stop/destroy) + Stripe webhook lifecycle handlers + GitHub callback rollback
+- [x] 09-03-PLAN.md -- Provision workflow rollback on failure (server_id in failure callback + VM cleanup step)
 
 #### Phase 10: Status Integration
 **Goal**: Dashboard shows real-time provisioning progress with production data
@@ -119,5 +119,5 @@ Phases execute in numeric order: 6 → 7 → 8 → 9 → 10
 | 6. Async Pipeline Foundation | v1.1 | 3/3 | Complete | 2026-02-13 |
 | 7. VM Provisioning via Hetzner API | v1.1 | 3/3 | Complete | 2026-02-13 |
 | 8. Agent Configuration via Ansible | v1.1 | 1/1 | Complete | 2026-02-13 |
-| 9. Lifecycle Management | v1.1 | 0/3 | Not started | - |
+| 9. Lifecycle Management | v1.1 | 3/3 | Complete | 2026-02-13 |
 | 10. Status Integration | v1.1 | 0/? | Not started | - |
