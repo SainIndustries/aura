@@ -72,10 +72,10 @@ Plans:
   2. Playbook installs Docker, systemd services, and agent runtime successfully
   3. Agent process starts automatically and remains running after playbook completes
   4. SSH connection handling and cloud-init timing work reliably on fresh VMs
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 08-01: TBD during planning
+- [ ] 08-01-PLAN.md — Ansible playbook for remote VM configuration + GitHub Actions workflow integration
 
 #### Phase 9: Lifecycle Management
 **Goal**: Users can control agent state and system handles subscription lifecycle
