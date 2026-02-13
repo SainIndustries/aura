@@ -46,22 +46,22 @@ Plans:
 - [x] 06-02-PLAN.md — Stripe webhook enhancement + GitHub Actions workflow trigger
 - [x] 06-03-PLAN.md — GitHub Actions callback endpoint + provisioning workflow YAML
 
-#### Phase 7: VM Provisioning via Hetzner API
+#### ✅ Phase 7: VM Provisioning via Hetzner API (Complete — 2026-02-13)
 **Goal**: Create and destroy Hetzner VMs with Tailscale networking via direct API calls
 **Depends on**: Phase 6
 **Requirements**: PROV-01, PROV-03, PROV-06
 **Success Criteria** (what must be TRUE):
-  1. GitHub Actions workflow creates Hetzner VM via REST API when job is dispatched
-  2. VM is provisioned with SSH access and basic networking within 2 minutes
-  3. VM automatically joins Tailscale network with ephemeral auth key
-  4. Database stores VM metadata (server_id, server_ip, tailscale_ip, region)
-  5. Complete provision flow (payment to running VM) completes in under 5 minutes
+  1. ✓ GitHub Actions workflow creates Hetzner VM via REST API when job is dispatched
+  2. ✓ VM is provisioned with SSH access and basic networking within 2 minutes
+  3. ✓ VM automatically joins Tailscale network with ephemeral auth key
+  4. ✓ Database stores VM metadata (server_id, server_ip, tailscale_ip, region)
+  5. ? Complete provision flow (payment to running VM) completes in under 5 minutes (needs live timing)
 **Plans**: 3 plans
 
 Plans:
-- [ ] 07-01-PLAN.md — Hetzner, Tailscale, and cloud-init API client modules
-- [ ] 07-02-PLAN.md — VM provisioning orchestrator + GitHub Actions workflow integration
-- [ ] 07-03-PLAN.md — Callback handler extension + database VM metadata storage
+- [x] 07-01-PLAN.md — Hetzner, Tailscale, and cloud-init API client modules
+- [x] 07-02-PLAN.md — VM provisioning orchestrator + GitHub Actions workflow integration
+- [x] 07-03-PLAN.md — Callback handler extension + database VM metadata storage
 
 #### Phase 8: Agent Configuration via Ansible
 **Goal**: Configure VMs with openclaw-ansible adapted for remote execution
@@ -115,7 +115,7 @@ Phases execute in numeric order: 6 → 7 → 8 → 9 → 10
 |-------|-----------|----------------|--------|-----------|
 | 1-5. Foundation | v1.0 | - | Complete | 2026-02-13 |
 | 6. Async Pipeline Foundation | v1.1 | 3/3 | Complete | 2026-02-13 |
-| 7. VM Provisioning via Hetzner API | v1.1 | 0/3 | Not started | - |
+| 7. VM Provisioning via Hetzner API | v1.1 | 3/3 | Complete | 2026-02-13 |
 | 8. Agent Configuration via Ansible | v1.1 | 0/? | Not started | - |
 | 9. Lifecycle Management | v1.1 | 0/? | Not started | - |
 | 10. Status Integration | v1.1 | 0/? | Not started | - |
