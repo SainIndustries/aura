@@ -9,19 +9,19 @@ See: .planning/PROJECT.md (updated 2026-02-13)
 
 ## Current Position
 
-Phase: 7 of 10 (VM Provisioning via Hetzner API) — COMPLETE
-Plan: 3 of 3 complete
-Status: Phase 7 complete, ready for Phase 8
-Last activity: 2026-02-13 — Completed 07-02: VM provisioning orchestrator and workflow integration
+Phase: 8 of 10 (Agent Configuration via Ansible)
+Plan: 1 of 1 complete
+Status: Phase 8 complete, ready for Phase 9
+Last activity: 2026-02-13 — Completed 08-01: Ansible playbook and GitHub Actions workflow integration
 
 Progress: [████░░░░░░] 40% (v1.1 phases - 2 of 5 phases complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 6
+- Total plans completed: 7
 - Average duration: 2.2 minutes
-- Total execution time: 0.21 hours
+- Total execution time: 0.24 hours
 
 **By Phase:**
 
@@ -29,9 +29,10 @@ Progress: [████░░░░░░] 40% (v1.1 phases - 2 of 5 phases comp
 |-------|-------|-------|----------|
 | 06    | 3     | 445s  | 148s     |
 | 07    | 3     | 355s  | 118s     |
+| 08    | 1     | 147s  | 147s     |
 
 **Recent Trend:**
-- Last 5 plans: 06-02 (100s), 06-03 (152s), 07-01 (124s), 07-03 (116s), 07-02 (115s)
+- Last 5 plans: 06-03 (152s), 07-01 (124s), 07-03 (116s), 07-02 (115s), 08-01 (147s)
 - Trend: Consistent execution speed around 2 minutes per plan
 
 *Updated after each plan completion*
@@ -71,6 +72,12 @@ Recent decisions affecting current work:
 - Phase 07 Plan 02: Node.js 20 with npm ci ensures TypeScript execution works in Actions environment
 - Phase 07 Plan 03: Update agent status to 'active' atomically with instance creation in completeProvisioningWithMetadata
 - Phase 07 Plan 03: Support backward compatibility for status=running without metadata via conditional routing
+- Phase 08 Plan 01: Use apt for Ansible installation in GitHub Actions instead of pipx (faster, sufficient for CI)
+- Phase 08 Plan 01: Use tailscale/github-action@v3 to join runner to Tailnet for SSH access to VMs
+- Phase 08 Plan 01: Generate dynamic Ansible inventory in workflow from VM provisioning outputs
+- Phase 08 Plan 01: Accept new SSH host keys with StrictHostKeyChecking=accept-new (fresh VMs)
+- Phase 08 Plan 01: Set agent service to enabled but allow start to fail (agent binary deployed in later phase)
+- Phase 08 Plan 01: Single platform SSH key from GitHub Secrets for all VMs (per-agent keys deferred to Phase 11)
 
 ### Pending Todos
 
@@ -80,8 +87,8 @@ None yet.
 
 **Architecture:**
 - Vercel serverless timeout (10s hobby, 60s pro) incompatible with 5-15min infrastructure operations — mitigation: async-first pattern established in Phase 6
-- Hetzner API rate limits (100-200 req/min) require monitoring and backoff — address during Phase 7 implementation
-- openclaw-ansible localhost dependencies unknown until examined — address during Phase 8 planning
+- Hetzner API rate limits (100-200 req/min) require monitoring and backoff — addressed during Phase 7 implementation
+- openclaw-ansible localhost dependencies resolved — adapted for remote execution in Phase 8
 
 **Scope:**
 - Scope narrowed from research suggestions: no multi-region, no health monitoring, no failure notifications in v1.1
@@ -97,5 +104,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-13
-Stopped at: Completed Phase 07 Plan 02 — VM provisioning orchestrator and workflow integration
-Resume file: .planning/phases/07-vm-provisioning-via-hetzner-api/07-02-SUMMARY.md
+Stopped at: Completed Phase 08 Plan 01 — Ansible playbook and GitHub Actions workflow integration
+Resume file: .planning/phases/08-agent-configuration-via-ansible/08-01-SUMMARY.md
