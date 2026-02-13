@@ -9,7 +9,19 @@ import type { IntegrationProvider } from "@/lib/integrations/providers";
 import { Clock } from "lucide-react";
 
 // Providers that use API key authentication
-const API_KEY_PROVIDERS = ["elevenlabs", "twilio", "datadog", "aws", "railway"];
+const API_KEY_PROVIDERS = [
+  "elevenlabs",
+  "twilio",
+  "datadog",
+  "aws",
+  "railway",
+  "pagerduty",
+  "sentry",
+  "stripe",
+  "expensify",
+  "greenhouse",
+  "bamboohr",
+];
 
 interface IntegrationCardProps {
   provider: IntegrationProvider;

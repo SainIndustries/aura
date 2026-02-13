@@ -23,10 +23,38 @@ import {
 import { Button } from "@/components/ui/button";
 
 // Providers that use OAuth flow
-const OAUTH_PROVIDERS = ["google", "slack", "github", "bitbucket", "vercel"];
+const OAUTH_PROVIDERS = [
+  "google",
+  "slack",
+  "github",
+  "bitbucket",
+  "vercel",
+  "salesforce",
+  "microsoft-teams",
+  "jira",
+  "notion",
+  "linear",
+  "zendesk",
+  "xero",
+  "bill-com",
+  "lever",
+  "workday",
+];
 
 // Providers that use API key authentication
-const API_KEY_PROVIDERS = ["elevenlabs", "twilio", "datadog", "aws", "railway"];
+const API_KEY_PROVIDERS = [
+  "elevenlabs",
+  "twilio",
+  "datadog",
+  "aws",
+  "railway",
+  "pagerduty",
+  "sentry",
+  "stripe",
+  "expensify",
+  "greenhouse",
+  "bamboohr",
+];
 
 // Provider display names for toast messages
 const PROVIDER_NAMES: Record<string, string> = {
@@ -40,6 +68,22 @@ const PROVIDER_NAMES: Record<string, string> = {
   aws: "AWS",
   vercel: "Vercel",
   railway: "Railway",
+  salesforce: "Salesforce",
+  "microsoft-teams": "Microsoft Teams",
+  jira: "Jira",
+  notion: "Notion",
+  linear: "Linear",
+  zendesk: "Zendesk",
+  pagerduty: "PagerDuty",
+  sentry: "Sentry",
+  stripe: "Stripe",
+  xero: "Xero",
+  expensify: "Expensify",
+  "bill-com": "Bill.com",
+  greenhouse: "Greenhouse",
+  lever: "Lever",
+  bamboohr: "BambooHR",
+  workday: "Workday",
 };
 
 interface IntegrationsGridProps {

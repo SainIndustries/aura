@@ -336,8 +336,8 @@ async function getSignatureKey(
   serviceName: string
 ): Promise<ArrayBuffer> {
   const encoder = new TextEncoder();
-  const kDate = await hmac(encoder.encode("AWS4" + secretKey), dateStamp);
-  const kRegion = await hmac(kDate, regionName);
-  const kService = await hmac(kRegion, serviceName);
+  const kDate = new Uint8Array(await hmac(encoder.encode("AWS4" + secretKey), dateStamp));
+  const kRegion = new Uint8Array(await hmac(kDate, regionName));
+  const kService = new Uint8Array(await hmac(kRegion, serviceName));
   return hmac(kService, "aws4_request");
 }

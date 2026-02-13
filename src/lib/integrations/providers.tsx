@@ -1034,7 +1034,7 @@ export const integrationProviders: IntegrationProvider[] = [
     ],
     docsUrl: "https://developer.mixpanel.com",
     category: "analytics",
-    comingSoon: true,
+    comingSoon: false,
   },
   {
     id: "amplitude",
@@ -1051,7 +1051,7 @@ export const integrationProviders: IntegrationProvider[] = [
     ],
     docsUrl: "https://www.docs.developers.amplitude.com",
     category: "analytics",
-    comingSoon: true,
+    comingSoon: false,
   },
   {
     id: "segment",
@@ -1068,7 +1068,7 @@ export const integrationProviders: IntegrationProvider[] = [
     ],
     docsUrl: "https://segment.com/docs/connections/sources/catalog/libraries/server/http-api/",
     category: "analytics",
-    comingSoon: true,
+    comingSoon: false,
   },
   {
     id: "google-analytics",
@@ -1085,7 +1085,7 @@ export const integrationProviders: IntegrationProvider[] = [
     ],
     docsUrl: "https://developers.google.com/analytics",
     category: "analytics",
-    comingSoon: true,
+    comingSoon: false,
   },
 
   // ============================================
@@ -1140,7 +1140,7 @@ export const integrationProviders: IntegrationProvider[] = [
     ],
     docsUrl: "https://developer.helpscout.com",
     category: "support",
-    comingSoon: true,
+    comingSoon: false,
   },
 
   // ============================================
@@ -1161,7 +1161,7 @@ export const integrationProviders: IntegrationProvider[] = [
     ],
     docsUrl: "https://buffer.com/developers/api",
     category: "marketing",
-    comingSoon: true,
+    comingSoon: false,
   },
   {
     id: "hootsuite",
@@ -1178,7 +1178,7 @@ export const integrationProviders: IntegrationProvider[] = [
     ],
     docsUrl: "https://developer.hootsuite.com",
     category: "marketing",
-    comingSoon: true,
+    comingSoon: false,
   },
   {
     id: "mailchimp",
@@ -1195,7 +1195,7 @@ export const integrationProviders: IntegrationProvider[] = [
     ],
     docsUrl: "https://mailchimp.com/developer/",
     category: "marketing",
-    comingSoon: true,
+    comingSoon: false,
   },
   {
     id: "sendgrid",
@@ -1212,7 +1212,7 @@ export const integrationProviders: IntegrationProvider[] = [
     ],
     docsUrl: "https://docs.sendgrid.com",
     category: "marketing",
-    comingSoon: true,
+    comingSoon: false,
   },
   {
     id: "twitter",
@@ -1229,7 +1229,7 @@ export const integrationProviders: IntegrationProvider[] = [
     ],
     docsUrl: "https://developer.twitter.com/en/docs",
     category: "marketing",
-    comingSoon: true,
+    comingSoon: false,
   },
 
   // ============================================
@@ -1250,7 +1250,7 @@ export const integrationProviders: IntegrationProvider[] = [
     ],
     docsUrl: "https://docs.snyk.io/snyk-api",
     category: "security",
-    comingSoon: true,
+    comingSoon: false,
   },
   {
     id: "1password",
@@ -1267,7 +1267,7 @@ export const integrationProviders: IntegrationProvider[] = [
     ],
     docsUrl: "https://developer.1password.com",
     category: "security",
-    comingSoon: true,
+    comingSoon: false,
   },
 ];
 

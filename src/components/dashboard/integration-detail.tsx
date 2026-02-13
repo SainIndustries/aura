@@ -17,7 +17,19 @@ import { Check, ExternalLink, Shield, Eye, EyeOff, AlertCircle } from "lucide-re
 import type { IntegrationProvider } from "@/lib/integrations/providers";
 
 // Providers that use API key authentication instead of OAuth
-const API_KEY_PROVIDERS = ["elevenlabs", "twilio", "datadog", "aws", "railway"];
+const API_KEY_PROVIDERS = [
+  "elevenlabs",
+  "twilio",
+  "datadog",
+  "aws",
+  "railway",
+  "pagerduty",
+  "sentry",
+  "stripe",
+  "expensify",
+  "greenhouse",
+  "bamboohr",
+];
 
 interface IntegrationDetailProps {
   provider: IntegrationProvider;
@@ -50,10 +62,17 @@ export function IntegrationDetail({
   const [applicationKey, setApplicationKey] = useState("");
   const [accessKeyId, setAccessKeyId] = useState("");
   const [secretAccessKey, setSecretAccessKey] = useState("");
+  const [secretKey, setSecretKey] = useState("");
+  const [publishableKey, setPublishableKey] = useState("");
+  const [partnerUserID, setPartnerUserID] = useState("");
+  const [partnerUserSecret, setPartnerUserSecret] = useState("");
+  const [subdomain, setSubdomain] = useState("");
+  const [organization, setOrganization] = useState("");
   const [showApiKey, setShowApiKey] = useState(false);
   const [showAuthToken, setShowAuthToken] = useState(false);
   const [showApplicationKey, setShowApplicationKey] = useState(false);
   const [showSecretKey, setShowSecretKey] = useState(false);
+  const [showPartnerSecret, setShowPartnerSecret] = useState(false);
   const [error, setError] = useState("");
 
   const handleConnect = async () => {
@@ -108,6 +127,64 @@ export function IntegrationDetail({
           return;
         }
         await onConnect({ apiToken: apiKey.trim() });
+      } else if (provider.id === "pagerduty") {
+        if (!apiKey.trim()) {
+          setError("API Key is required");
+          return;
+        }
+        await onConnect({ apiKey: apiKey.trim() });
+      } else if (provider.id === "sentry") {
+        if (!authToken.trim()) {
+          setError("Auth Token is required");
+          return;
+        }
+        const credentials: Record<string, string> = { authToken: authToken.trim() };
+        if (organization.trim()) {
+          credentials.organization = organization.trim();
+        }
+        await onConnect(credentials);
+      } else if (provider.id === "stripe") {
+        if (!secretKey.trim()) {
+          setError("Secret Key is required");
+          return;
+        }
+        const credentials: Record<string, string> = { secretKey: secretKey.trim() };
+        if (publishableKey.trim()) {
+          credentials.publishableKey = publishableKey.trim();
+        }
+        await onConnect(credentials);
+      } else if (provider.id === "expensify") {
+        if (!partnerUserID.trim()) {
+          setError("Partner User ID is required");
+          return;
+        }
+        if (!partnerUserSecret.trim()) {
+          setError("Partner User Secret is required");
+          return;
+        }
+        await onConnect({
+          partnerUserID: partnerUserID.trim(),
+          partnerUserSecret: partnerUserSecret.trim(),
+        });
+      } else if (provider.id === "greenhouse") {
+        if (!apiKey.trim()) {
+          setError("API Key is required");
+          return;
+        }
+        await onConnect({ apiKey: apiKey.trim() });
+      } else if (provider.id === "bamboohr") {
+        if (!apiKey.trim()) {
+          setError("API Key is required");
+          return;
+        }
+        if (!subdomain.trim()) {
+          setError("Company subdomain is required");
+          return;
+        }
+        await onConnect({
+          apiKey: apiKey.trim(),
+          subdomain: subdomain.trim(),
+        });
       }
     } else {
       await onConnect();
@@ -123,6 +200,12 @@ export function IntegrationDetail({
     setApplicationKey("");
     setAccessKeyId("");
     setSecretAccessKey("");
+    setSecretKey("");
+    setPublishableKey("");
+    setPartnerUserID("");
+    setPartnerUserSecret("");
+    setSubdomain("");
+    setOrganization("");
     setError("");
   };
 
@@ -135,11 +218,18 @@ export function IntegrationDetail({
       setApplicationKey("");
       setAccessKeyId("");
       setSecretAccessKey("");
+      setSecretKey("");
+      setPublishableKey("");
+      setPartnerUserID("");
+      setPartnerUserSecret("");
+      setSubdomain("");
+      setOrganization("");
       setError("");
       setShowApiKey(false);
       setShowAuthToken(false);
       setShowApplicationKey(false);
       setShowSecretKey(false);
+      setShowPartnerSecret(false);
     }
     onOpenChange(isOpen);
   };
@@ -450,6 +540,298 @@ export function IntegrationDetail({
                     </a>
                   </p>
                 </div>
+              )}
+
+              {provider.id === "pagerduty" && (
+                <div className="space-y-2">
+                  <Label htmlFor="apiKey" className="text-aura-text-light">
+                    API Key
+                  </Label>
+                  <div className="relative">
+                    <Input
+                      id="apiKey"
+                      type={showApiKey ? "text" : "password"}
+                      placeholder="Enter your PagerDuty API key"
+                      value={apiKey}
+                      onChange={(e) => setApiKey(e.target.value)}
+                      className="pr-10 bg-aura-elevated border-[rgba(255,255,255,0.05)]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowApiKey(!showApiKey)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-aura-text-dim hover:text-aura-text-light"
+                    >
+                      {showApiKey ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </button>
+                  </div>
+                  <p className="text-xs text-aura-text-dim">
+                    Generate an API key at{" "}
+                    <a
+                      href="https://support.pagerduty.com/docs/api-access-keys"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-aura-accent hover:underline"
+                    >
+                      PagerDuty API Access Keys
+                    </a>
+                  </p>
+                </div>
+              )}
+
+              {provider.id === "sentry" && (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="authToken" className="text-aura-text-light">
+                      Auth Token
+                    </Label>
+                    <div className="relative">
+                      <Input
+                        id="authToken"
+                        type={showAuthToken ? "text" : "password"}
+                        placeholder="Enter your Sentry Auth Token"
+                        value={authToken}
+                        onChange={(e) => setAuthToken(e.target.value)}
+                        className="pr-10 bg-aura-elevated border-[rgba(255,255,255,0.05)]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowAuthToken(!showAuthToken)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-aura-text-dim hover:text-aura-text-light"
+                      >
+                        {showAuthToken ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="organization" className="text-aura-text-light">
+                      Organization Slug <span className="text-aura-text-dim">(optional)</span>
+                    </Label>
+                    <Input
+                      id="organization"
+                      type="text"
+                      placeholder="your-org-slug"
+                      value={organization}
+                      onChange={(e) => setOrganization(e.target.value)}
+                      className="bg-aura-elevated border-[rgba(255,255,255,0.05)]"
+                    />
+                  </div>
+                  <p className="text-xs text-aura-text-dim">
+                    Create an auth token at{" "}
+                    <a
+                      href="https://sentry.io/settings/account/api/auth-tokens/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-aura-accent hover:underline"
+                    >
+                      sentry.io/settings/account/api/auth-tokens
+                    </a>
+                  </p>
+                </>
+              )}
+
+              {provider.id === "stripe" && (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="secretKey" className="text-aura-text-light">
+                      Secret Key
+                    </Label>
+                    <div className="relative">
+                      <Input
+                        id="secretKey"
+                        type={showSecretKey ? "text" : "password"}
+                        placeholder="sk_live_... or sk_test_..."
+                        value={secretKey}
+                        onChange={(e) => setSecretKey(e.target.value)}
+                        className="pr-10 bg-aura-elevated border-[rgba(255,255,255,0.05)]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowSecretKey(!showSecretKey)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-aura-text-dim hover:text-aura-text-light"
+                      >
+                        {showSecretKey ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="publishableKey" className="text-aura-text-light">
+                      Publishable Key <span className="text-aura-text-dim">(optional)</span>
+                    </Label>
+                    <Input
+                      id="publishableKey"
+                      type="text"
+                      placeholder="pk_live_... or pk_test_..."
+                      value={publishableKey}
+                      onChange={(e) => setPublishableKey(e.target.value)}
+                      className="bg-aura-elevated border-[rgba(255,255,255,0.05)]"
+                    />
+                  </div>
+                  <p className="text-xs text-aura-text-dim">
+                    Find your API keys at{" "}
+                    <a
+                      href="https://dashboard.stripe.com/apikeys"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-aura-accent hover:underline"
+                    >
+                      dashboard.stripe.com/apikeys
+                    </a>
+                  </p>
+                </>
+              )}
+
+              {provider.id === "expensify" && (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="partnerUserID" className="text-aura-text-light">
+                      Partner User ID
+                    </Label>
+                    <Input
+                      id="partnerUserID"
+                      type="text"
+                      placeholder="Enter your Partner User ID"
+                      value={partnerUserID}
+                      onChange={(e) => setPartnerUserID(e.target.value)}
+                      className="bg-aura-elevated border-[rgba(255,255,255,0.05)]"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="partnerUserSecret" className="text-aura-text-light">
+                      Partner User Secret
+                    </Label>
+                    <div className="relative">
+                      <Input
+                        id="partnerUserSecret"
+                        type={showPartnerSecret ? "text" : "password"}
+                        placeholder="Enter your Partner User Secret"
+                        value={partnerUserSecret}
+                        onChange={(e) => setPartnerUserSecret(e.target.value)}
+                        className="pr-10 bg-aura-elevated border-[rgba(255,255,255,0.05)]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPartnerSecret(!showPartnerSecret)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-aura-text-dim hover:text-aura-text-light"
+                      >
+                        {showPartnerSecret ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                  <p className="text-xs text-aura-text-dim">
+                    Get your credentials at{" "}
+                    <a
+                      href="https://www.expensify.com/tools/integrations/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-aura-accent hover:underline"
+                    >
+                      expensify.com/tools/integrations
+                    </a>
+                  </p>
+                </>
+              )}
+
+              {provider.id === "greenhouse" && (
+                <div className="space-y-2">
+                  <Label htmlFor="apiKey" className="text-aura-text-light">
+                    Harvest API Key
+                  </Label>
+                  <div className="relative">
+                    <Input
+                      id="apiKey"
+                      type={showApiKey ? "text" : "password"}
+                      placeholder="Enter your Greenhouse Harvest API key"
+                      value={apiKey}
+                      onChange={(e) => setApiKey(e.target.value)}
+                      className="pr-10 bg-aura-elevated border-[rgba(255,255,255,0.05)]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowApiKey(!showApiKey)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-aura-text-dim hover:text-aura-text-light"
+                    >
+                      {showApiKey ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </button>
+                  </div>
+                  <p className="text-xs text-aura-text-dim">
+                    Generate an API key at{" "}
+                    <a
+                      href="https://app.greenhouse.io/configure/dev_center/credentials"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-aura-accent hover:underline"
+                    >
+                      Greenhouse Dev Center
+                    </a>
+                  </p>
+                </div>
+              )}
+
+              {provider.id === "bamboohr" && (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="subdomain" className="text-aura-text-light">
+                      Company Subdomain
+                    </Label>
+                    <Input
+                      id="subdomain"
+                      type="text"
+                      placeholder="yourcompany (from yourcompany.bamboohr.com)"
+                      value={subdomain}
+                      onChange={(e) => setSubdomain(e.target.value)}
+                      className="bg-aura-elevated border-[rgba(255,255,255,0.05)]"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="apiKey" className="text-aura-text-light">
+                      API Key
+                    </Label>
+                    <div className="relative">
+                      <Input
+                        id="apiKey"
+                        type={showApiKey ? "text" : "password"}
+                        placeholder="Enter your BambooHR API key"
+                        value={apiKey}
+                        onChange={(e) => setApiKey(e.target.value)}
+                        className="pr-10 bg-aura-elevated border-[rgba(255,255,255,0.05)]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowApiKey(!showApiKey)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-aura-text-dim hover:text-aura-text-light"
+                      >
+                        {showApiKey ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                  <p className="text-xs text-aura-text-dim">
+                    Generate an API key in your BambooHR account under Settings → API Keys
+                  </p>
+                </>
               )}
             </div>
           )}
