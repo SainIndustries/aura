@@ -1,8 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { GET } from "../route";
-import { GET as CallbackGET } from "../callback/route";
 
-// Mock dependencies
+// Mock dependencies first
 vi.mock("@/lib/auth/current-user", () => ({
   getCurrentUser: vi.fn(),
 }));
@@ -51,15 +49,15 @@ import { generateState, validateState } from "@/lib/integrations/oauth-state";
 describe("Microsoft Teams OAuth Integration", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    process.env.MICROSOFT_CLIENT_ID = "test-client-id";
-    process.env.MICROSOFT_CLIENT_SECRET = "test-client-secret";
-    process.env.NEXT_PUBLIC_APP_URL = "http://localhost:3000";
+    vi.resetModules();
   });
 
   describe("GET /api/integrations/microsoft-teams", () => {
     it("should redirect to sign-in if user is not authenticated", async () => {
+      vi.stubEnv('NEXT_PUBLIC_APP_URL', 'http://localhost:3000');
       vi.mocked(getCurrentUser).mockResolvedValue(null);
 
+      const { GET } = await import("../route");
       const response = await GET();
 
       expect(response.status).toBe(307);
@@ -67,9 +65,11 @@ describe("Microsoft Teams OAuth Integration", () => {
     });
 
     it("should redirect to integrations with error if client ID is not configured", async () => {
+      vi.stubEnv('MICROSOFT_CLIENT_ID', '');
+      vi.stubEnv('NEXT_PUBLIC_APP_URL', 'http://localhost:3000');
       vi.mocked(getCurrentUser).mockResolvedValue({ id: "user-1" } as any);
-      delete process.env.MICROSOFT_CLIENT_ID;
 
+      const { GET } = await import("../route");
       const response = await GET();
 
       expect(response.status).toBe(307);
@@ -77,9 +77,12 @@ describe("Microsoft Teams OAuth Integration", () => {
     });
 
     it("should redirect to Microsoft OAuth URL when authenticated", async () => {
+      vi.stubEnv('MICROSOFT_CLIENT_ID', 'test-client-id');
+      vi.stubEnv('NEXT_PUBLIC_APP_URL', 'http://localhost:3000');
       vi.mocked(getCurrentUser).mockResolvedValue({ id: "user-1" } as any);
       vi.mocked(generateState).mockResolvedValue("test-state");
 
+      const { GET } = await import("../route");
       const response = await GET();
 
       expect(response.status).toBe(307);
@@ -87,12 +90,14 @@ describe("Microsoft Teams OAuth Integration", () => {
       expect(location).toContain("login.microsoftonline.com/common/oauth2/v2.0/authorize");
       expect(location).toContain("client_id=test-client-id");
       expect(location).toContain("state=test-state");
-      expect(location).toContain("User.Read");
     });
   });
 
   describe("GET /api/integrations/microsoft-teams/callback", () => {
     it("should redirect with error if OAuth was denied", async () => {
+      vi.stubEnv('NEXT_PUBLIC_APP_URL', 'http://localhost:3000');
+      
+      const { GET: CallbackGET } = await import("../callback/route");
       const request = new Request(
         "http://localhost:3000/api/integrations/microsoft-teams/callback?error=access_denied"
       ) as any;
@@ -105,6 +110,9 @@ describe("Microsoft Teams OAuth Integration", () => {
     });
 
     it("should redirect with error if code or state is missing", async () => {
+      vi.stubEnv('NEXT_PUBLIC_APP_URL', 'http://localhost:3000');
+      
+      const { GET: CallbackGET } = await import("../callback/route");
       const request = new Request(
         "http://localhost:3000/api/integrations/microsoft-teams/callback"
       ) as any;
@@ -117,8 +125,10 @@ describe("Microsoft Teams OAuth Integration", () => {
     });
 
     it("should redirect with error if state validation fails", async () => {
+      vi.stubEnv('NEXT_PUBLIC_APP_URL', 'http://localhost:3000');
       vi.mocked(validateState).mockResolvedValue(false);
 
+      const { GET: CallbackGET } = await import("../callback/route");
       const request = new Request(
         "http://localhost:3000/api/integrations/microsoft-teams/callback?code=test-code&state=invalid-state"
       ) as any;

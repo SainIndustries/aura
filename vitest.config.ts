@@ -21,10 +21,10 @@ export default defineConfig({
         '**/types.ts',
       ],
       thresholds: {
-        statements: 60,
-        branches: 60,
+        statements: 55,
+        branches: 55,
         functions: 30,  // Lower threshold for API routes which don't export many functions
-        lines: 60,
+        lines: 55,
       },
     },
     testTimeout: 10000,

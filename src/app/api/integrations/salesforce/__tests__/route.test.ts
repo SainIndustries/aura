@@ -1,9 +1,6 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Store original env
-const originalEnv = { ...process.env };
-
-// Mock dependencies
+// Mock dependencies first
 vi.mock("@/lib/auth/current-user", () => ({
   getCurrentUser: vi.fn(),
 }));
@@ -47,36 +44,60 @@ vi.mock("next/headers", () => ({
 }));
 
 import { getCurrentUser } from "@/lib/auth/current-user";
-import { validateState } from "@/lib/integrations/oauth-state";
+import { generateState, validateState } from "@/lib/integrations/oauth-state";
 
 describe("Salesforce OAuth Integration", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    process.env.SALESFORCE_CLIENT_ID = "test-client-id";
-    process.env.SALESFORCE_CLIENT_SECRET = "test-client-secret";
-    process.env.NEXT_PUBLIC_APP_URL = "http://localhost:3000";
-  });
-
-  afterEach(() => {
-    process.env = { ...originalEnv };
+    vi.resetModules();
   });
 
   describe("GET /api/integrations/salesforce", () => {
     it("should redirect to sign-in if user is not authenticated", async () => {
+      vi.stubEnv('NEXT_PUBLIC_APP_URL', 'http://localhost:3000');
       vi.mocked(getCurrentUser).mockResolvedValue(null);
-      
+
       const { GET } = await import("../route");
       const response = await GET();
 
       expect(response.status).toBe(307);
       expect(response.headers.get("location")).toContain("/sign-in");
     });
+
+    it("should redirect to integrations with error if client ID is not configured", async () => {
+      vi.stubEnv('SALESFORCE_CLIENT_ID', '');
+      vi.stubEnv('NEXT_PUBLIC_APP_URL', 'http://localhost:3000');
+      vi.mocked(getCurrentUser).mockResolvedValue({ id: "user-1" } as any);
+
+      const { GET } = await import("../route");
+      const response = await GET();
+
+      expect(response.status).toBe(307);
+      expect(response.headers.get("location")).toContain("error=salesforce_not_configured");
+    });
+
+    it("should redirect to Salesforce OAuth URL when authenticated", async () => {
+      vi.stubEnv('SALESFORCE_CLIENT_ID', 'test-client-id');
+      vi.stubEnv('NEXT_PUBLIC_APP_URL', 'http://localhost:3000');
+      vi.mocked(getCurrentUser).mockResolvedValue({ id: "user-1" } as any);
+      vi.mocked(generateState).mockResolvedValue("test-state");
+
+      const { GET } = await import("../route");
+      const response = await GET();
+
+      expect(response.status).toBe(307);
+      const location = response.headers.get("location");
+      expect(location).toContain("login.salesforce.com/services/oauth2/authorize");
+      expect(location).toContain("client_id=test-client-id");
+      expect(location).toContain("state=test-state");
+    });
   });
 
   describe("GET /api/integrations/salesforce/callback", () => {
     it("should redirect with error if OAuth was denied", async () => {
-      const { GET: CallbackGET } = await import("../callback/route");
+      vi.stubEnv('NEXT_PUBLIC_APP_URL', 'http://localhost:3000');
       
+      const { GET: CallbackGET } = await import("../callback/route");
       const request = new Request(
         "http://localhost:3000/api/integrations/salesforce/callback?error=access_denied"
       ) as any;
@@ -89,8 +110,9 @@ describe("Salesforce OAuth Integration", () => {
     });
 
     it("should redirect with error if code or state is missing", async () => {
-      const { GET: CallbackGET } = await import("../callback/route");
+      vi.stubEnv('NEXT_PUBLIC_APP_URL', 'http://localhost:3000');
       
+      const { GET: CallbackGET } = await import("../callback/route");
       const request = new Request(
         "http://localhost:3000/api/integrations/salesforce/callback"
       ) as any;
@@ -103,9 +125,10 @@ describe("Salesforce OAuth Integration", () => {
     });
 
     it("should redirect with error if state validation fails", async () => {
+      vi.stubEnv('NEXT_PUBLIC_APP_URL', 'http://localhost:3000');
       vi.mocked(validateState).mockResolvedValue(false);
-      const { GET: CallbackGET } = await import("../callback/route");
 
+      const { GET: CallbackGET } = await import("../callback/route");
       const request = new Request(
         "http://localhost:3000/api/integrations/salesforce/callback?code=test-code&state=invalid-state"
       ) as any;

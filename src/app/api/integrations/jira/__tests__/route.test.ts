@@ -1,11 +1,6 @@
-import { describe, it, expect, vi, beforeEach, beforeAll } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Mock environment variables BEFORE importing modules
-vi.stubEnv('JIRA_CLIENT_ID', 'test-client-id');
-vi.stubEnv('JIRA_CLIENT_SECRET', 'test-client-secret');
-vi.stubEnv('NEXT_PUBLIC_APP_URL', 'http://localhost:3000');
-
-// Mock dependencies
+// Mock dependencies first
 vi.mock("@/lib/auth/current-user", () => ({
   getCurrentUser: vi.fn(),
 }));
@@ -48,20 +43,21 @@ vi.mock("next/headers", () => ({
   })),
 }));
 
-import { GET } from "../route";
-import { GET as CallbackGET } from "../callback/route";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { generateState, validateState } from "@/lib/integrations/oauth-state";
 
 describe("Jira OAuth Integration", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.resetModules();
   });
 
   describe("GET /api/integrations/jira", () => {
     it("should redirect to sign-in if user is not authenticated", async () => {
+      vi.stubEnv('NEXT_PUBLIC_APP_URL', 'http://localhost:3000');
       vi.mocked(getCurrentUser).mockResolvedValue(null);
 
+      const { GET } = await import("../route");
       const response = await GET();
 
       expect(response.status).toBe(307);
@@ -69,26 +65,24 @@ describe("Jira OAuth Integration", () => {
     });
 
     it("should redirect to integrations with error if client ID is not configured", async () => {
-      vi.mocked(getCurrentUser).mockResolvedValue({ id: "user-1" } as any);
       vi.stubEnv('JIRA_CLIENT_ID', '');
+      vi.stubEnv('NEXT_PUBLIC_APP_URL', 'http://localhost:3000');
+      vi.mocked(getCurrentUser).mockResolvedValue({ id: "user-1" } as any);
 
-      // Re-import the module to pick up new env
-      vi.resetModules();
-      const { GET: GET2 } = await import("../route");
-      
-      const response = await GET2();
+      const { GET } = await import("../route");
+      const response = await GET();
 
       expect(response.status).toBe(307);
       expect(response.headers.get("location")).toContain("error=jira_not_configured");
-      
-      // Restore
-      vi.stubEnv('JIRA_CLIENT_ID', 'test-client-id');
     });
 
     it("should redirect to Atlassian OAuth URL when authenticated", async () => {
+      vi.stubEnv('JIRA_CLIENT_ID', 'test-client-id');
+      vi.stubEnv('NEXT_PUBLIC_APP_URL', 'http://localhost:3000');
       vi.mocked(getCurrentUser).mockResolvedValue({ id: "user-1" } as any);
       vi.mocked(generateState).mockResolvedValue("test-state");
 
+      const { GET } = await import("../route");
       const response = await GET();
 
       expect(response.status).toBe(307);
@@ -101,6 +95,9 @@ describe("Jira OAuth Integration", () => {
 
   describe("GET /api/integrations/jira/callback", () => {
     it("should redirect with error if OAuth was denied", async () => {
+      vi.stubEnv('NEXT_PUBLIC_APP_URL', 'http://localhost:3000');
+      
+      const { GET: CallbackGET } = await import("../callback/route");
       const request = new Request(
         "http://localhost:3000/api/integrations/jira/callback?error=access_denied"
       ) as any;
@@ -113,6 +110,9 @@ describe("Jira OAuth Integration", () => {
     });
 
     it("should redirect with error if code or state is missing", async () => {
+      vi.stubEnv('NEXT_PUBLIC_APP_URL', 'http://localhost:3000');
+      
+      const { GET: CallbackGET } = await import("../callback/route");
       const request = new Request(
         "http://localhost:3000/api/integrations/jira/callback"
       ) as any;
@@ -125,8 +125,10 @@ describe("Jira OAuth Integration", () => {
     });
 
     it("should redirect with error if state validation fails", async () => {
+      vi.stubEnv('NEXT_PUBLIC_APP_URL', 'http://localhost:3000');
       vi.mocked(validateState).mockResolvedValue(false);
 
+      const { GET: CallbackGET } = await import("../callback/route");
       const request = new Request(
         "http://localhost:3000/api/integrations/jira/callback?code=test-code&state=invalid-state"
       ) as any;
