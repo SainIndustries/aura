@@ -21,6 +21,7 @@
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
     "@neondatabase/serverless": "^1.0.2",
+    "@next/third-parties": "^16.1.6",
     "@privy-io/react-auth": "^3.13.1",
     "@privy-io/server-auth": "^1.32.5",
     "@sentry/nextjs": "^10.38.0",

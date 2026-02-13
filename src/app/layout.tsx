@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Sora, JetBrains_Mono } from "next/font/google";
+import { GoogleAnalytics } from "@next/third-parties/google";
 import { PrivyProvider } from "@/components/providers/privy-provider";
 import { Toaster } from "sonner";
 import "./globals.css";
@@ -104,6 +105,9 @@ export default function RootLayout({
           }}
         />
       </body>
+      {process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID && (
+        <GoogleAnalytics gaId={process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID} />
+      )}
     </html>
   );
 }
