@@ -1,0 +1,926 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>More Aura — Your AI. Built to run with you.</title>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-void: #020308;
+    --bg-deep: #060a14;
+    --bg-surface: #0b1022;
+    --bg-elevated: #101730;
+    --accent: #4f8fff;
+    --accent-bright: #6da3ff;
+    --accent-dim: #2d5fb8;
+    --glow: rgba(79, 143, 255, 0.12);
+    --glow-strong: rgba(79, 143, 255, 0.25);
+    --mint: #34d399;
+    --amber: #fbbf24;
+    --text-white: #edf0f7;
+    --text-light: #b0b8cc;
+    --text-dim: #5c6680;
+    --text-ghost: #333d52;
+    --border-subtle: rgba(255,255,255,0.05);
+    --border-accent: rgba(79, 143, 255, 0.12);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'Sora', sans-serif;
+    background: var(--bg-void);
+    color: var(--text-white);
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.025'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 10000;
+  }
+
+  ::selection { background: var(--accent); color: white; }
+
+  /* NAV */
+  nav {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 1000;
+    padding: 0 48px;
+    height: 72px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(2, 3, 8, 0.75);
+    backdrop-filter: blur(24px) saturate(1.4);
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    text-decoration: none;
+  }
+
+  .logo-mark {
+    width: 34px; height: 34px;
+    border-radius: 9px;
+    background: linear-gradient(135deg, var(--accent), #7c5cfc);
+    display: grid;
+    place-items: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .logo-mark::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(255,255,255,0.15), transparent);
+    border-radius: inherit;
+  }
+
+  .logo-mark svg { width: 18px; height: 18px; position: relative; z-index: 1; }
+
+  .logo-word {
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: -0.4px;
+    color: var(--text-white);
+  }
+
+  .logo-word em { font-style: normal; color: var(--accent); }
+
+  .nav-right { display: flex; align-items: center; gap: 32px; }
+
+  .nav-link {
+    color: var(--text-dim);
+    text-decoration: none;
+    font-size: 13.5px;
+    font-weight: 500;
+    letter-spacing: 0.15px;
+    transition: color 0.2s;
+  }
+
+  .nav-link:hover { color: var(--text-light); }
+
+  .nav-btn {
+    padding: 9px 22px;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 13.5px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.2s;
+  }
+
+  .nav-btn:hover {
+    background: var(--accent-bright);
+    box-shadow: 0 4px 24px var(--glow-strong);
+    transform: translateY(-1px);
+  }
+
+  /* HERO */
+  .hero {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 120px 24px 60px;
+    position: relative;
+  }
+
+  .hero-orb {
+    position: absolute;
+    top: -10%; left: 50%;
+    transform: translateX(-50%);
+    width: 800px; height: 800px;
+    border-radius: 50%;
+    background: radial-gradient(circle,
+      rgba(79, 143, 255, 0.07) 0%,
+      rgba(124, 92, 252, 0.03) 35%,
+      transparent 65%
+    );
+    animation: orbBreathe 10s ease-in-out infinite;
+    pointer-events: none;
+  }
+
+  @keyframes orbBreathe {
+    0%, 100% { transform: translateX(-50%) scale(1); opacity: 0.7; }
+    50% { transform: translateX(-50%) scale(1.15); opacity: 1; }
+  }
+
+  .hero-grid {
+    position: absolute; inset: 0;
+    background:
+      linear-gradient(rgba(79, 143, 255, 0.018) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(79, 143, 255, 0.018) 1px, transparent 1px);
+    background-size: 72px 72px;
+    mask-image: radial-gradient(ellipse 60% 50% at 50% 30%, black 10%, transparent 70%);
+    -webkit-mask-image: radial-gradient(ellipse 60% 50% at 50% 30%, black 10%, transparent 70%);
+  }
+
+  .hero-inner {
+    position: relative; z-index: 5;
+    max-width: 780px;
+  }
+
+  .hero-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 16px 5px 7px;
+    background: rgba(79, 143, 255, 0.06);
+    border: 1px solid var(--border-accent);
+    border-radius: 999px;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--accent-bright);
+    margin-bottom: 36px;
+    animation: fadeSlideUp 0.7s ease both;
+  }
+
+  .chip-dot {
+    width: 7px; height: 7px;
+    background: var(--mint);
+    border-radius: 50%;
+    animation: blink 2.5s ease-in-out infinite;
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  h1 {
+    font-size: clamp(46px, 7.5vw, 84px);
+    font-weight: 800;
+    line-height: 1.02;
+    letter-spacing: -3.5px;
+    margin-bottom: 28px;
+    animation: fadeSlideUp 0.7s ease 0.08s both;
+  }
+
+  h1 .hl {
+    background: linear-gradient(135deg, var(--accent-bright), #a78bfa, var(--accent));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .hero-p {
+    font-size: 18px;
+    line-height: 1.75;
+    color: var(--text-light);
+    max-width: 520px;
+    margin: 0 auto 44px;
+    font-weight: 400;
+    animation: fadeSlideUp 0.7s ease 0.16s both;
+  }
+
+  .hero-btns {
+    display: flex;
+    gap: 14px;
+    justify-content: center;
+    flex-wrap: wrap;
+    animation: fadeSlideUp 0.7s ease 0.24s both;
+  }
+
+  .btn-main {
+    padding: 15px 34px;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.25s;
+  }
+
+  .btn-main:hover {
+    background: var(--accent-bright);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 36px var(--glow-strong);
+  }
+
+  .btn-main svg { transition: transform 0.2s; }
+  .btn-main:hover svg { transform: translateX(3px); }
+
+  .btn-ghost {
+    padding: 15px 34px;
+    background: transparent;
+    color: var(--text-light);
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.25s;
+  }
+
+  .btn-ghost:hover {
+    border-color: var(--text-dim);
+    color: var(--text-white);
+    background: rgba(255,255,255,0.02);
+  }
+
+  @keyframes fadeSlideUp {
+    from { opacity: 0; transform: translateY(18px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* TERMINAL */
+  .demo {
+    padding: 20px 24px 140px;
+    display: flex;
+    justify-content: center;
+    position: relative; z-index: 5;
+  }
+
+  .term {
+    width: 100%; max-width: 680px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow:
+      0 32px 80px rgba(0,0,0,0.5),
+      0 0 0 1px rgba(255,255,255,0.025) inset,
+      0 0 120px -40px var(--glow);
+    animation: fadeSlideUp 0.8s ease 0.4s both;
+  }
+
+  .term-bar {
+    display: flex;
+    align-items: center;
+    padding: 14px 18px;
+    gap: 7px;
+    background: rgba(255,255,255,0.015);
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .term-dot { width: 11px; height: 11px; border-radius: 50%; }
+  .term-dot:nth-child(1) { background: #ff5f57; }
+  .term-dot:nth-child(2) { background: #febc2e; }
+  .term-dot:nth-child(3) { background: #28c840; }
+
+  .term-label {
+    flex: 1; text-align: center;
+    font-size: 12px;
+    color: var(--text-ghost);
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 500;
+  }
+
+  .term-body {
+    padding: 26px 22px 30px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13.5px;
+    line-height: 2.1;
+  }
+
+  .tl { opacity: 0; animation: typeLine 0.35s ease forwards; }
+  .tl:nth-child(1)  { animation-delay: 0.9s; }
+  .tl:nth-child(2)  { animation-delay: 1.8s; }
+  .tl:nth-child(3)  { animation-delay: 2.7s; }
+  .tl:nth-child(4)  { animation-delay: 3.4s; }
+  .tl:nth-child(5)  { animation-delay: 4.4s; }
+  .tl:nth-child(6)  { animation-delay: 5.3s; }
+  .tl:nth-child(7)  { animation-delay: 6.2s; }
+  .tl:nth-child(8)  { animation-delay: 7.0s; }
+  .tl:nth-child(9)  { animation-delay: 7.8s; }
+  .tl:nth-child(10) { animation-delay: 8.6s; }
+
+  @keyframes typeLine {
+    from { opacity: 0; transform: translateY(5px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .tp  { color: var(--accent-bright); }
+  .tc  { color: var(--text-white); }
+  .tr  { color: var(--text-light); }
+  .tok { color: var(--mint); }
+
+  /* SECTION STYLES */
+  .s-label {
+    font-size: 11.5px; font-weight: 700;
+    letter-spacing: 3px; text-transform: uppercase;
+    color: var(--accent); margin-bottom: 14px;
+  }
+
+  .s-title {
+    font-size: clamp(30px, 4.5vw, 50px);
+    font-weight: 800; letter-spacing: -2.5px;
+    line-height: 1.08; margin-bottom: 18px;
+  }
+
+  .s-desc {
+    font-size: 16.5px; color: var(--text-light);
+    line-height: 1.75; max-width: 480px;
+  }
+
+  /* WHAT AURA DOES */
+  .what {
+    padding: 100px 48px 120px;
+    max-width: 1160px; margin: 0 auto;
+  }
+
+  .what .s-desc { margin-bottom: 72px; }
+
+  .what-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 18px;
+  }
+
+  .what-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: 16px;
+    padding: 40px 32px;
+    transition: all 0.35s cubic-bezier(0.22, 0.61, 0.36, 1);
+    position: relative; overflow: hidden;
+  }
+
+  .what-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent 10%, var(--accent) 50%, transparent 90%);
+    opacity: 0; transition: opacity 0.35s;
+  }
+
+  .what-card:hover {
+    border-color: var(--border-accent);
+    background: var(--bg-elevated);
+    transform: translateY(-4px);
+    box-shadow: 0 16px 48px rgba(0,0,0,0.3), 0 0 40px -10px var(--glow);
+  }
+
+  .what-card:hover::before { opacity: 1; }
+
+  .what-icon {
+    width: 50px; height: 50px;
+    border-radius: 13px;
+    display: grid; place-items: center;
+    margin-bottom: 22px; font-size: 23px;
+  }
+
+  .wi-1 { background: rgba(79, 143, 255, 0.08); }
+  .wi-2 { background: rgba(52, 211, 153, 0.08); }
+  .wi-3 { background: rgba(251, 191, 36, 0.08); }
+  .wi-4 { background: rgba(167, 139, 250, 0.08); }
+
+  .what-card h3 {
+    font-size: 18px; font-weight: 700;
+    letter-spacing: -0.4px; margin-bottom: 10px;
+  }
+
+  .what-card p {
+    font-size: 14.5px; color: var(--text-light); line-height: 1.7;
+  }
+
+  .example {
+    margin-top: 18px;
+    padding: 12px 16px;
+    background: rgba(0,0,0,0.25);
+    border-radius: 8px;
+    border-left: 2px solid var(--accent);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12.5px;
+    color: var(--text-dim);
+    line-height: 1.6;
+  }
+
+  .example .eq { color: var(--accent-bright); }
+
+  /* WHO */
+  .who {
+    padding: 100px 48px 120px;
+    max-width: 1160px; margin: 0 auto;
+  }
+
+  .who .s-desc { margin-bottom: 72px; }
+
+  .who-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 18px;
+  }
+
+  .who-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: 16px;
+    padding: 36px 28px;
+    transition: all 0.3s;
+  }
+
+  .who-card:hover {
+    border-color: var(--border-accent);
+    transform: translateY(-3px);
+  }
+
+  .who-emoji { font-size: 32px; margin-bottom: 18px; display: block; }
+
+  .who-card h3 {
+    font-size: 17px; font-weight: 700;
+    letter-spacing: -0.3px; margin-bottom: 10px;
+  }
+
+  .who-card p {
+    font-size: 14px; color: var(--text-light); line-height: 1.7;
+  }
+
+  /* HOW */
+  .how {
+    padding: 100px 48px 120px;
+    max-width: 1160px; margin: 0 auto;
+  }
+
+  .how .s-desc { margin-bottom: 72px; }
+
+  .steps {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 18px;
+    position: relative;
+  }
+
+  .steps::before {
+    content: '';
+    position: absolute;
+    top: 44px; left: 16.6%; right: 16.6%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--border-accent), var(--border-accent), transparent);
+  }
+
+  .step { text-align: center; position: relative; z-index: 1; }
+
+  .step-num {
+    width: 48px; height: 48px;
+    border-radius: 50%;
+    background: var(--bg-surface);
+    border: 2px solid var(--accent);
+    display: inline-grid; place-items: center;
+    font-size: 16px; font-weight: 700;
+    color: var(--accent-bright);
+    margin-bottom: 24px;
+    box-shadow: 0 0 24px var(--glow);
+  }
+
+  .step h3 {
+    font-size: 17px; font-weight: 700;
+    margin-bottom: 8px; letter-spacing: -0.3px;
+  }
+
+  .step p {
+    font-size: 14px; color: var(--text-light);
+    line-height: 1.65; max-width: 280px; margin: 0 auto;
+  }
+
+  /* TRUST */
+  .trust-strip {
+    padding: 80px 48px;
+    max-width: 1160px; margin: 0 auto;
+  }
+
+  .trust-box {
+    background: linear-gradient(135deg, rgba(79, 143, 255, 0.04), rgba(124, 92, 252, 0.03));
+    border: 1px solid var(--border-accent);
+    border-radius: 20px;
+    padding: 56px 64px;
+    display: flex;
+    align-items: center;
+    gap: 56px;
+    position: relative; overflow: hidden;
+  }
+
+  .trust-box::after {
+    content: '';
+    position: absolute;
+    top: -60px; right: -60px;
+    width: 300px; height: 300px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(124, 92, 252, 0.06), transparent 65%);
+    pointer-events: none;
+  }
+
+  .trust-text { flex: 1; position: relative; z-index: 2; }
+
+  .trust-text h2 {
+    font-size: 34px; font-weight: 800;
+    letter-spacing: -1.5px; line-height: 1.15;
+    margin-bottom: 14px;
+  }
+
+  .trust-text p {
+    font-size: 15.5px; color: var(--text-light); line-height: 1.7;
+  }
+
+  .trust-badges {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px; flex-shrink: 0;
+    position: relative; z-index: 2;
+  }
+
+  .trust-badge {
+    background: rgba(2, 3, 8, 0.55);
+    border: 1px solid var(--border-subtle);
+    border-radius: 12px;
+    padding: 20px 24px;
+    text-align: center; min-width: 140px;
+  }
+
+  .trust-val {
+    font-size: 26px; font-weight: 800;
+    letter-spacing: -0.5px;
+    color: var(--accent-bright); margin-bottom: 3px;
+  }
+
+  .trust-lbl {
+    font-size: 11.5px; color: var(--text-dim);
+    font-weight: 500; letter-spacing: 0.3px;
+  }
+
+  /* CTA */
+  .cta {
+    padding: 140px 48px 120px;
+    text-align: center;
+    position: relative;
+  }
+
+  .cta::before {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 500px;
+    background: radial-gradient(ellipse at center bottom, rgba(79, 143, 255, 0.05), transparent 65%);
+    pointer-events: none;
+  }
+
+  .cta-inner {
+    position: relative; z-index: 5;
+    max-width: 620px; margin: 0 auto;
+  }
+
+  .cta h2 {
+    font-size: clamp(36px, 5.5vw, 60px);
+    font-weight: 800; letter-spacing: -2.5px;
+    line-height: 1.08; margin-bottom: 20px;
+  }
+
+  .cta p {
+    font-size: 17px; color: var(--text-light);
+    line-height: 1.7; margin-bottom: 40px;
+  }
+
+  /* FOOTER */
+  footer {
+    border-top: 1px solid var(--border-subtle);
+    max-width: 1160px; margin: 0 auto;
+    padding: 40px 48px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .ft-brand {
+    font-size: 13.5px; color: var(--text-dim);
+  }
+
+  .ft-brand a {
+    color: var(--text-light);
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.2s;
+  }
+
+  .ft-brand a:hover { color: var(--accent); }
+
+  .ft-right {
+    display: flex;
+    align-items: center; gap: 24px;
+  }
+
+  .ft-link {
+    font-size: 12.5px; color: var(--text-ghost);
+    text-decoration: none; transition: color 0.2s;
+  }
+
+  .ft-link:hover { color: var(--text-dim); }
+
+  .ft-copy { font-size: 11.5px; color: var(--text-ghost); }
+
+  /* RESPONSIVE */
+  @media (max-width: 960px) {
+    nav { padding: 0 24px; }
+    .nav-link { display: none; }
+    .what-grid, .who-grid, .steps { grid-template-columns: 1fr; }
+    .steps::before { display: none; }
+    .what, .who, .how, .trust-strip, .cta { padding-left: 24px; padding-right: 24px; }
+    .trust-box { flex-direction: column; padding: 40px 28px; gap: 36px; }
+    .trust-badges { width: 100%; }
+    footer { flex-direction: column; gap: 20px; text-align: center; }
+    .ft-right { flex-direction: column; gap: 12px; }
+  }
+
+  @media (max-width: 600px) {
+    h1 { letter-spacing: -2px; }
+    .trust-badges { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <a href="#" class="logo">
+    <div class="logo-mark">
+      <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+        <path d="M2 17l10 5 10-5"/>
+        <path d="M2 12l10 5 10-5"/>
+      </svg>
+    </div>
+    <span class="logo-word">more<em>aura</em></span>
+  </a>
+  <div class="nav-right">
+    <a href="#what" class="nav-link">Capabilities</a>
+    <a href="#who" class="nav-link">Who It's For</a>
+    <a href="#how" class="nav-link">How It Works</a>
+    <a href="#" class="nav-btn">Request Early Access</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-orb"></div>
+  <div class="hero-grid"></div>
+  <div class="hero-inner">
+    <div class="hero-chip">
+      <span class="chip-dot"></span>
+      Now in Early Access
+    </div>
+    <h1>Your AI.<br><span class="hl">More of it.</span></h1>
+    <p class="hero-p">
+      Aura is the AI that actually runs with you — scheduling, research,
+      communications, pipeline — unified under one intelligence layer
+      built for people who operate.
+    </p>
+    <div class="hero-btns">
+      <a href="#" class="btn-main">
+        Get Early Access
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+          <path d="M3 8h10m0 0L9 4m4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </a>
+      <a href="#what" class="btn-ghost">See What Aura Does</a>
+    </div>
+  </div>
+</section>
+
+<!-- TERMINAL DEMO -->
+<section class="demo">
+  <div class="term">
+    <div class="term-bar">
+      <span class="term-dot"></span>
+      <span class="term-dot"></span>
+      <span class="term-dot"></span>
+      <span class="term-label">aura · active session</span>
+    </div>
+    <div class="term-body">
+      <div class="tl"><span class="tp">you →</span> <span class="tc">Set up a call with Marcus for Thursday to discuss the pilot program</span></div>
+      <div class="tl"><span class="tr">↳ Checking availability... found a mutual slot Thu 2/20 at 10:30 AM.</span></div>
+      <div class="tl"><span class="tok">✓ Calendar invite sent to Marcus Chen — Thu 2/20, 10:30 AM ET</span></div>
+      <div class="tl">&nbsp;</div>
+      <div class="tl"><span class="tp">you →</span> <span class="tc">Draft a follow-up email to the team about next week's deliverables</span></div>
+      <div class="tl"><span class="tr">↳ Pulling context from your last 3 standups and the project tracker...</span></div>
+      <div class="tl"><span class="tok">✓ Draft ready — 4 action items, assigned owners, deadline callouts</span></div>
+      <div class="tl">&nbsp;</div>
+      <div class="tl"><span class="tp">you →</span> <span class="tc">What's the status on our pipeline? Anything I should follow up on today?</span></div>
+      <div class="tl"><span class="tok">✓ 3 deals in play. The Meridian contract went quiet — last touch was 9 days ago. Suggest a check-in.</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- WHAT AURA DOES -->
+<section class="what" id="what">
+  <div class="s-label">Capabilities</div>
+  <h2 class="s-title">One AI that<br>runs everything.</h2>
+  <p class="s-desc">
+    Aura isn't a chatbot. It's an operations layer — connecting your calendar,
+    comms, pipeline, and projects into one intelligence that learns how you work.
+  </p>
+  <div class="what-grid">
+    <div class="what-card">
+      <div class="what-icon wi-1">🎙️</div>
+      <h3>Voice-First Interface</h3>
+      <p>Speak naturally and Aura executes. Schedule calls, draft emails, update your pipeline, pull research — all through conversation. No dashboards. No forms. Just talk.</p>
+      <div class="example"><span class="eq">"Aura,</span> reschedule tomorrow's standup to 3pm and let the team know."</div>
+    </div>
+    <div class="what-card">
+      <div class="what-icon wi-2">🧠</div>
+      <h3>Persistent Context</h3>
+      <p>Aura remembers your projects, your team, your priorities. Ask "where did we leave off with Meridian?" and get an instant brief — not a blank stare.</p>
+      <div class="example"><span class="eq">"Aura,</span> what did I commit to in last Friday's partner call?"</div>
+    </div>
+    <div class="what-card">
+      <div class="what-icon wi-3">⚡</div>
+      <h3>Real-Time Execution</h3>
+      <p>Aura doesn't just suggest — it does. Sends the email. Books the room. Updates the tracker. Flags the risk. You stay in flow while Aura handles the overhead.</p>
+      <div class="example"><span class="eq">"Aura,</span> send the proposal to Sarah with the updated pricing deck attached."</div>
+    </div>
+    <div class="what-card">
+      <div class="what-icon wi-4">🔐</div>
+      <h3>Built on Trust</h3>
+      <p>Every output is verifiable. Aura runs on cryptographic infrastructure that ensures accountability at every step. Not just smart — provably trustworthy.</p>
+      <div class="example"><span class="eq">"Aura,</span> show me the audit trail for the deliverable we sent Monday."</div>
+    </div>
+  </div>
+</section>
+
+<!-- WHO IT'S FOR -->
+<section class="who" id="who">
+  <div class="s-label">Built For</div>
+  <h2 class="s-title">Operators. Builders.<br>People who ship.</h2>
+  <p class="s-desc">
+    Aura is for anyone who runs too many things to keep in their head —
+    and needs an AI that keeps up.
+  </p>
+  <div class="who-grid">
+    <div class="who-card">
+      <span class="who-emoji">🚀</span>
+      <h3>Founders & CEOs</h3>
+      <p>You're the calendar, the CRM, the ops team, and the closer. Aura gives you back the hours you lose to context-switching so you can focus on building.</p>
+    </div>
+    <div class="who-card">
+      <span class="who-emoji">🏗️</span>
+      <h3>Contractors & Consultants</h3>
+      <p>Managing multiple clients, deadlines, and deliverables across complex organizations. Aura tracks what you can't and surfaces what matters before you ask.</p>
+    </div>
+    <div class="who-card">
+      <span class="who-emoji">🎯</span>
+      <h3>BD & Operations Leads</h3>
+      <p>Pipeline tracking, follow-up cadences, proposal timelines — Aura keeps your deals moving and flags when something goes quiet before it goes cold.</p>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="how" id="how">
+  <div class="s-label">How It Works</div>
+  <h2 class="s-title">Three steps to<br><span class="hl">more.</span></h2>
+  <p class="s-desc">
+    Getting started with Aura takes less time than scheduling a meeting the old way.
+  </p>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <h3>Connect Your Tools</h3>
+      <p>Calendar, email, Slack, your CRM — Aura plugs into where you already work. No migration. No learning curve.</p>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <h3>Talk to Aura</h3>
+      <p>Voice or text — tell Aura what you need. It learns your patterns, your team, your priorities with every interaction.</p>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <h3>Watch It Run</h3>
+      <p>Aura executes in real-time. Meetings booked. Emails drafted. Pipelines updated. You just operate.</p>
+    </div>
+  </div>
+</section>
+
+<!-- TRUST -->
+<section class="trust-strip">
+  <div class="trust-box">
+    <div class="trust-text">
+      <div class="s-label">Why Aura</div>
+      <h2>AI you can<br>actually trust.</h2>
+      <p>
+        Most AI assistants are black boxes. Aura is built on cryptographic infrastructure
+        that makes every action auditable, every output verifiable, and every decision
+        traceable. Enterprise-grade security isn't a feature — it's the foundation.
+      </p>
+    </div>
+    <div class="trust-badges">
+      <div class="trust-badge">
+        <div class="trust-val">100%</div>
+        <div class="trust-lbl">Output Traceability</div>
+      </div>
+      <div class="trust-badge">
+        <div class="trust-val">E2E</div>
+        <div class="trust-lbl">Encrypted</div>
+      </div>
+      <div class="trust-badge">
+        <div class="trust-val">SOC 2</div>
+        <div class="trust-lbl">Ready Architecture</div>
+      </div>
+      <div class="trust-badge">
+        <div class="trust-val">Zero</div>
+        <div class="trust-lbl">Data Sharing</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta">
+  <div class="cta-inner">
+    <h2>Everyone wanted<br>their own AI.<br><span class="hl">Build with Aura.</span></h2>
+    <p>
+      Aura is in early access for operators who move fast and need an AI
+      that keeps up. Request access and see what more looks like.
+    </p>
+    <div class="hero-btns">
+      <a href="#" class="btn-main">
+        Request Early Access
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+          <path d="M3 8h10m0 0L9 4m4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="ft-brand">
+    <strong>Aura</strong> is built by <a href="https://sainindustries.com">SAIN Industries</a>
+  </div>
+  <div class="ft-right">
+    <a href="#" class="ft-link">Privacy</a>
+    <a href="#" class="ft-link">Terms</a>
+    <a href="https://sainindustries.com" class="ft-link">sainindustries.com</a>
+    <span class="ft-copy">&copy; 2026 SAIN Industries LLC</span>
+  </div>
+</footer>
+
+</body>
+</html>
