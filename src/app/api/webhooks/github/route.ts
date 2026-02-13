@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { updateJobStatus, recordHeartbeat, completeProvisioningWithMetadata } from "@/lib/provisioning/queue";
+import { rollbackFailedProvision } from "@/lib/provisioning/lifecycle";
 
 function verifySignature(body: string, signature: string | null): boolean {
   if (!signature) return false;
@@ -88,6 +89,22 @@ export async function POST(request: Request) {
           failedStep: payload.failed_step,
         });
         console.log(`[GitHub Callback] Job ${payload.job_id} status -> ${payload.status}`);
+
+        // Trigger rollback on failure
+        if (payload.status === "failed") {
+          try {
+            await rollbackFailedProvision(payload.job_id);
+            console.log(
+              `[GitHub Callback] Rollback completed for failed job ${payload.job_id}`
+            );
+          } catch (rollbackError) {
+            console.error(
+              `[GitHub Callback] Rollback failed for job ${payload.job_id}:`,
+              rollbackError
+            );
+            // Log but don't fail the callback response - rollback is best-effort
+          }
+        }
       }
     } else {
       return NextResponse.json({ error: "Missing status or type" }, { status: 400 });

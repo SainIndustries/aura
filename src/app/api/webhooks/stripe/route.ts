@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe";
 import { db } from "@/lib/db";
-import { subscriptions, users, provisioningJobs, agents } from "@/lib/db/schema";
+import { subscriptions, users, provisioningJobs, agents, agentInstances } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import type Stripe from "stripe";
 import { enqueueProvisioningJob, getJobByStripeEventId } from "@/lib/provisioning/queue";
 import { triggerProvisioningWorkflow } from "@/lib/provisioning/github-actions";
+import { destroyAgent, stopAgent } from "@/lib/provisioning/lifecycle";
 
 export async function POST(request: Request) {
   const body = await request.text();
@@ -84,14 +85,79 @@ export async function POST(request: Request) {
         break;
       }
 
-      case "customer.subscription.updated":
-      case "customer.subscription.deleted": {
+      case "customer.subscription.updated": {
         const sub = event.data.object as Stripe.Subscription;
         await upsertSubscription(sub);
         break;
       }
 
-      case "invoice.paid":
+      case "customer.subscription.deleted": {
+        const sub = event.data.object as Stripe.Subscription;
+        await upsertSubscription(sub);
+
+        // Destroy all running agents for this customer
+        const customerId =
+          typeof sub.customer === "string" ? sub.customer : sub.customer?.id;
+
+        if (!customerId) {
+          console.warn("[Stripe Webhook] No customer ID in subscription.deleted event");
+          break;
+        }
+
+        const user = await db.query.users.findFirst({
+          where: eq(users.stripeCustomerId, customerId),
+        });
+
+        if (!user) {
+          console.warn(
+            `[Stripe Webhook] No user found for Stripe customer ${customerId}`
+          );
+          break;
+        }
+
+        // Find all agents with running instances for this user
+        const userAgents = await db.query.agents.findMany({
+          where: eq(agents.userId, user.id),
+          with: { instances: true },
+        });
+
+        // Destroy each agent that has a running instance with serverId
+        for (const agent of userAgents) {
+          const runningInstance = agent.instances?.find(
+            (instance) =>
+              instance.status === "running" && instance.serverId
+          );
+
+          if (runningInstance) {
+            try {
+              await destroyAgent(agent.id);
+              console.log(
+                `[Stripe Webhook] Destroyed agent ${agent.id} due to subscription cancellation`
+              );
+            } catch (error) {
+              console.error(
+                `[Stripe Webhook] Failed to destroy agent ${agent.id}:`,
+                error
+              );
+              // Continue with next agent
+            }
+          }
+        }
+
+        break;
+      }
+
+      case "invoice.paid": {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const invoice = event.data.object as any;
+        const subscriptionId = invoice.subscription as string | null;
+        if (subscriptionId) {
+          const sub = await stripe.subscriptions.retrieve(subscriptionId);
+          await upsertSubscription(sub);
+        }
+        break;
+      }
+
       case "invoice.payment_failed": {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const invoice = event.data.object as any;
@@ -100,6 +166,60 @@ export async function POST(request: Request) {
           const sub = await stripe.subscriptions.retrieve(subscriptionId);
           await upsertSubscription(sub);
         }
+
+        // Suspend all running agents for this customer
+        const customerId =
+          typeof invoice.customer === "string"
+            ? invoice.customer
+            : invoice.customer?.id;
+
+        if (!customerId) {
+          console.warn(
+            "[Stripe Webhook] No customer ID in invoice.payment_failed event"
+          );
+          break;
+        }
+
+        const user = await db.query.users.findFirst({
+          where: eq(users.stripeCustomerId, customerId),
+        });
+
+        if (!user) {
+          console.warn(
+            `[Stripe Webhook] No user found for Stripe customer ${customerId}`
+          );
+          break;
+        }
+
+        // Find all agents with running instances for this user
+        const userAgents = await db.query.agents.findMany({
+          where: eq(agents.userId, user.id),
+          with: { instances: true },
+        });
+
+        // Suspend (stop) each agent that has a running instance with serverId
+        for (const agent of userAgents) {
+          const runningInstance = agent.instances?.find(
+            (instance) =>
+              instance.status === "running" && instance.serverId
+          );
+
+          if (runningInstance) {
+            try {
+              await stopAgent(agent.id);
+              console.log(
+                `[Stripe Webhook] Suspended agent ${agent.id} due to payment failure`
+              );
+            } catch (error) {
+              console.error(
+                `[Stripe Webhook] Failed to suspend agent ${agent.id}:`,
+                error
+              );
+              // Continue with next agent
+            }
+          }
+        }
+
         break;
       }
     }
