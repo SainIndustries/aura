@@ -29,6 +29,13 @@
       "when": 1771017447450,
       "tag": "0003_solid_viper",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1771031824756,
+      "tag": "0004_fearless_the_liberteens",
+      "breakpoints": true
     }
   ]
 }
