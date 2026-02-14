@@ -40,7 +40,7 @@ jobs:
       - name: Create VM and Build Snapshot
         env:
           HETZNER_API_TOKEN: ${{ secrets.HETZNER_API_TOKEN }}
-          HETZNER_SSH_KEY_NAME: ${{ secrets.HETZNER_SSH_KEY_NAME }}
+          HETZNER_SSH_KEY_NAME: "aura-snapshot-builder-ci"
         run: |
           set -euo pipefail
           
