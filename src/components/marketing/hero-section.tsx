@@ -85,10 +85,10 @@ export function HeroSection() {
 
         <div className="flex flex-wrap justify-center gap-[14px] animate-fade-slide-up [animation-delay:0.24s]">
           <a
-            href="#waitlist"
+            href="/sign-in"
             className="group inline-flex items-center gap-2 rounded-[10px] bg-aura-accent px-[34px] py-[15px] text-[15px] font-semibold text-white transition-all duration-[250ms] hover:-translate-y-0.5 hover:bg-aura-accent-bright hover:shadow-[0_8px_36px_rgba(79,143,255,0.25)]"
           >
-            Join Waitlist
+            Start Free Trial
             <svg
               width="15"
               height="15"

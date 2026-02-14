@@ -98,7 +98,7 @@ const navItems: NavItem[] = [
     },
   },
   { href: "#how", label: "How It Works" },
-  { href: "#waitlist", label: "Join Waitlist", highlight: true },
+  { href: "/sign-in", label: "Start Free Trial", highlight: true },
 ];
 
 function ThemeToggle() {

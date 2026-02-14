@@ -43,6 +43,9 @@ export async function createCheckoutSession(agentId?: string) {
         quantity: 1,
       },
     ],
+    subscription_data: {
+      trial_period_days: 7,
+    },
     metadata: agentId ? { agentId, userId: user.id } : undefined,
     success_url: successUrl,
     cancel_url: cancelUrl,
