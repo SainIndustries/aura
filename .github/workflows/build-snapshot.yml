@@ -1,17 +1,13 @@
 name: Build Snapshot
 
 on:
-  # Manual trigger
+  # Manual trigger only - no automatic rebuilds to avoid disrupting customer agents
   workflow_dispatch:
     inputs:
       reason:
         description: 'Reason for rebuild'
         required: false
         default: 'Manual rebuild'
-  
-  # Scheduled rebuild - every Sunday at 3am UTC for security patches
-  schedule:
-    - cron: '0 3 * * 0'
 
 jobs:
   build:

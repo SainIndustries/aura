@@ -102,16 +102,14 @@ The workflow uses GitHub's `environment: production` which allows:
 
 ---
 
-## Scheduled Rebuilds
+## Manual Rebuilds
 
-Snapshots rebuild automatically every Sunday at 3am UTC.
+Snapshots are rebuilt **manually only** to avoid disrupting customer agents.
 
-This ensures:
-- Latest security patches included
-- No drift from base configuration
-- Known-good state weekly
+Trigger a rebuild via:
+- GitHub Actions → Build Snapshot → Run workflow
 
-Manual rebuilds can be triggered anytime via workflow_dispatch.
+**Best practice:** Schedule periodic manual rebuilds (monthly) to include security patches. Coordinate with maintenance windows.
 
 ---
 
