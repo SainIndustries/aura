@@ -100,7 +100,7 @@ export async function createAuthKey(): Promise<{ key: string }> {
             reusable: false,
             ephemeral: true,
             preauthorized: true,
-            tags: ["tag:agent"],
+            tags: ["tag:ci"],
           },
         },
       },
