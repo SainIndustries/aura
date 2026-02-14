@@ -48,7 +48,7 @@ jobs:
       - name: Send provisioning callback
         run: |
           BODY='{"job_id":"${{ inputs.job_id }}","status":"provisioning","workflow_run_id":"${{ github.run_id }}"}'
-          SIGNATURE=$(echo -n "$BODY" | openssl dgst -sha256 -hmac "${{ secrets.GITHUB_CALLBACK_SECRET }}" -hex | awk '{print $NF}')
+          SIGNATURE=$(echo -n "$BODY" | openssl dgst -sha256 -hmac "${{ secrets.GH_CALLBACK_SECRET }}" -hex | awk '{print $NF}')
 
           curl -sf -X POST "${{ inputs.callback_url }}" \
             -H "Content-Type: application/json" \
@@ -63,7 +63,7 @@ jobs:
           while true; do
             sleep 60
             BODY='{"job_id":"${{ inputs.job_id }}","type":"heartbeat"}'
-            SIGNATURE=$(echo -n "$BODY" | openssl dgst -sha256 -hmac "${{ secrets.GITHUB_CALLBACK_SECRET }}" -hex | awk '{print $NF}')
+            SIGNATURE=$(echo -n "$BODY" | openssl dgst -sha256 -hmac "${{ secrets.GH_CALLBACK_SECRET }}" -hex | awk '{print $NF}')
 
             curl -sf -X POST "${{ inputs.callback_url }}" \
               -H "Content-Type: application/json" \
@@ -98,7 +98,7 @@ jobs:
             --arg step "vm_created" \
             --arg used_snapshot "${{ steps.provision.outputs.used_snapshot }}" \
             '{job_id: $job_id, status: $status, step: $step, used_snapshot: $used_snapshot}')
-          SIGNATURE=$(echo -n "$BODY" | openssl dgst -sha256 -hmac "${{ secrets.GITHUB_CALLBACK_SECRET }}" -hex | awk '{print $NF}')
+          SIGNATURE=$(echo -n "$BODY" | openssl dgst -sha256 -hmac "${{ secrets.GH_CALLBACK_SECRET }}" -hex | awk '{print $NF}')
 
           curl -sf -X POST "${{ inputs.callback_url }}" \
             -H "Content-Type: application/json" \
@@ -150,7 +150,7 @@ jobs:
             --arg step "ansible_started" \
             --arg mode "$MODE" \
             '{job_id: $job_id, status: $status, step: $step, mode: $mode}')
-          SIGNATURE=$(echo -n "$BODY" | openssl dgst -sha256 -hmac "${{ secrets.GITHUB_CALLBACK_SECRET }}" -hex | awk '{print $NF}')
+          SIGNATURE=$(echo -n "$BODY" | openssl dgst -sha256 -hmac "${{ secrets.GH_CALLBACK_SECRET }}" -hex | awk '{print $NF}')
 
           curl -sf -X POST "${{ inputs.callback_url }}" \
             -H "Content-Type: application/json" \
@@ -192,7 +192,7 @@ jobs:
             --arg step "ansible_complete" \
             --arg mode "$MODE" \
             '{job_id: $job_id, status: $status, step: $step, mode: $mode}')
-          SIGNATURE=$(echo -n "$BODY" | openssl dgst -sha256 -hmac "${{ secrets.GITHUB_CALLBACK_SECRET }}" -hex | awk '{print $NF}')
+          SIGNATURE=$(echo -n "$BODY" | openssl dgst -sha256 -hmac "${{ secrets.GH_CALLBACK_SECRET }}" -hex | awk '{print $NF}')
 
           curl -sf -X POST "${{ inputs.callback_url }}" \
             -H "Content-Type: application/json" \
@@ -226,7 +226,7 @@ jobs:
             --arg tailscale_ip "${{ steps.provision.outputs.tailscale_ip }}" \
             --arg used_snapshot "${{ steps.provision.outputs.used_snapshot }}" \
             '{job_id: $job_id, status: $status, server_id: $server_id, server_ip: $server_ip, tailscale_ip: $tailscale_ip, used_snapshot: $used_snapshot}')
-          SIGNATURE=$(echo -n "$BODY" | openssl dgst -sha256 -hmac "${{ secrets.GITHUB_CALLBACK_SECRET }}" -hex | awk '{print $NF}')
+          SIGNATURE=$(echo -n "$BODY" | openssl dgst -sha256 -hmac "${{ secrets.GH_CALLBACK_SECRET }}" -hex | awk '{print $NF}')
 
           curl -sf -X POST "${{ inputs.callback_url }}" \
             -H "Content-Type: application/json" \
@@ -276,7 +276,7 @@ jobs:
             --arg tailscale_ip "${{ steps.provision.outputs.tailscale_ip }}" \
             --arg used_snapshot "${{ steps.provision.outputs.used_snapshot }}" \
             '{job_id: $job_id, status: $status, error: $error, failed_step: $failed_step, step: $step, server_id: $server_id, server_ip: $server_ip, tailscale_ip: $tailscale_ip, used_snapshot: $used_snapshot}')
-          SIGNATURE=$(echo -n "$BODY" | openssl dgst -sha256 -hmac "${{ secrets.GITHUB_CALLBACK_SECRET }}" -hex | awk '{print $NF}')
+          SIGNATURE=$(echo -n "$BODY" | openssl dgst -sha256 -hmac "${{ secrets.GH_CALLBACK_SECRET }}" -hex | awk '{print $NF}')
 
           curl -sf -X POST "${{ inputs.callback_url }}" \
             -H "Content-Type: application/json" \
