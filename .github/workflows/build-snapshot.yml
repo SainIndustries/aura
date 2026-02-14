@@ -279,8 +279,8 @@ jobs:
               \"labels\": {
                 \"name\": \"$SNAPSHOT_NAME\",
                 \"purpose\": \"aura-agent-base\",
-                \"created\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",
-                \"no_secrets\": \"true\"
+                \"created\": \"$SNAPSHOT_DATE\",
+                \"no-secrets\": \"true\"
               }
             }")
           
