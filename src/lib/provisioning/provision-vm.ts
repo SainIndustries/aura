@@ -1,11 +1,15 @@
 /**
  * VM Provisioning Orchestrator
  * Coordinates Hetzner server creation, Tailscale enrollment, and cloud-init configuration
+ * 
+ * Supports two provisioning modes:
+ * 1. Snapshot mode (fast): Uses pre-baked HETZNER_SNAPSHOT_ID with cloud-init for agent config
+ * 2. Fallback mode (slow): Uses ubuntu-22.04 base image + Ansible for full configuration
  */
 
 import { createServer, waitForAction } from "../hetzner";
 import { createAuthKey, verifyEnrollment } from "../tailscale";
-import { generateCloudInitConfig } from "../cloud-init";
+import { generateCloudInitConfig, generateSnapshotCloudInitConfig } from "../cloud-init";
 
 export interface ProvisionVMParams {
   jobId: string;
@@ -18,6 +22,8 @@ export interface ProvisionVMResult {
   serverIp: string;
   tailscaleIp: string;
   serverName: string;
+  /** Whether snapshot mode was used (true) or fallback to base image (false) */
+  usedSnapshot: boolean;
 }
 
 /**
@@ -32,7 +38,34 @@ const REGION_TO_LOCATION_MAP: Record<string, string> = {
 };
 
 /**
+ * Get the image to use for provisioning
+ * Returns snapshot ID if available, otherwise falls back to ubuntu-22.04
+ */
+function getProvisioningImage(): { image: string; isSnapshot: boolean } {
+  const snapshotId = process.env.HETZNER_SNAPSHOT_ID;
+  
+  if (snapshotId && snapshotId.trim() !== "") {
+    console.log(`[ProvisionVM] Using snapshot image: ${snapshotId}`);
+    return { image: snapshotId, isSnapshot: true };
+  }
+  
+  console.log("[ProvisionVM] No snapshot configured, falling back to ubuntu-22.04");
+  return { image: "ubuntu-22.04", isSnapshot: false };
+}
+
+/**
  * Provision a VM with Hetzner and Tailscale integration
+ * 
+ * When HETZNER_SNAPSHOT_ID is set, uses the pre-baked snapshot which includes:
+ * - Docker, Node.js 20, fail2ban, UFW
+ * - openclaw user and directory structure
+ * - Security hardening pre-configured
+ * 
+ * Cloud-init then configures only agent-specific settings:
+ * - Tailscale enrollment
+ * - Agent environment variables
+ * - Service startup
+ * 
  * @param params - Provisioning parameters
  * @returns Promise<ProvisionVMResult>
  * @throws Error if any provisioning step fails
@@ -50,38 +83,56 @@ export async function provisionVM(
   const mappedLocation = REGION_TO_LOCATION_MAP[region] || "nbg1";
   console.log(`[ProvisionVM] Mapped region ${region} to location ${mappedLocation}`);
 
-  // 3. Create Tailscale ephemeral auth key
+  // 3. Determine image to use (snapshot or base)
+  const { image, isSnapshot } = getProvisioningImage();
+
+  // 4. Create Tailscale ephemeral auth key
   console.log("[ProvisionVM] Creating Tailscale auth key...");
   const authKeyResponse = await createAuthKey();
   const authKey = authKeyResponse.key;
   console.log("[ProvisionVM] Tailscale auth key generated");
 
-  // 4. Generate cloud-init config
+  // 5. Generate appropriate cloud-init config
   console.log("[ProvisionVM] Generating cloud-init configuration...");
-  const cloudInitConfig = generateCloudInitConfig({
-    tailscaleAuthKey: authKey,
-    hostname: serverName,
-  });
-  console.log("[ProvisionVM] Cloud-init config generated");
+  let cloudInitConfig: string;
+  
+  if (isSnapshot) {
+    // Snapshot mode: Only configure agent-specific settings
+    cloudInitConfig = generateSnapshotCloudInitConfig({
+      tailscaleAuthKey: authKey,
+      hostname: serverName,
+      agentId: agentId,
+      apiUrl: process.env.AURA_API_URL || "https://aura.openclaw.ai",
+    });
+    console.log("[ProvisionVM] Generated snapshot-mode cloud-init (agent config only)");
+  } else {
+    // Fallback mode: Minimal cloud-init, Ansible will handle the rest
+    cloudInitConfig = generateCloudInitConfig({
+      tailscaleAuthKey: authKey,
+      hostname: serverName,
+    });
+    console.log("[ProvisionVM] Generated fallback-mode cloud-init (Tailscale only)");
+  }
 
-  // 5. Read SSH key ID from environment
+  // 6. Read SSH key ID from environment
   const sshKeyId = process.env.HETZNER_SSH_KEY_ID;
   if (!sshKeyId) {
     throw new Error("[ProvisionVM] Missing HETZNER_SSH_KEY_ID environment variable");
   }
 
-  // 6. Create Hetzner server
-  console.log("[ProvisionVM] Creating Hetzner server...");
+  // 7. Create Hetzner server
+  console.log(`[ProvisionVM] Creating Hetzner server with image: ${image}...`);
   const createResponse = await createServer({
     name: serverName,
     serverType: "cpx11",
-    image: "ubuntu-22.04",
+    image: image,
     location: mappedLocation,
     sshKeys: [parseInt(sshKeyId, 10)],
     userData: cloudInitConfig,
     labels: {
       provisioning_job_id: jobId,
       agent_id: agentId,
+      provisioning_mode: isSnapshot ? "snapshot" : "fallback",
     },
   });
 
@@ -89,22 +140,23 @@ export async function provisionVM(
   const serverIp = createResponse.server.public_net.ipv4.ip;
   console.log(`[ProvisionVM] Hetzner server created: id=${serverId}, ip=${serverIp}`);
 
-  // 7. Wait for Hetzner action completion
+  // 8. Wait for Hetzner action completion
   console.log("[ProvisionVM] Waiting for server to be ready...");
   await waitForAction(createResponse.action.id);
   console.log("[ProvisionVM] Hetzner server is ready");
 
-  // 8. Verify Tailscale enrollment
+  // 9. Verify Tailscale enrollment
   console.log("[ProvisionVM] Verifying Tailscale enrollment...");
   const enrollment = await verifyEnrollment(serverName);
   console.log(`[ProvisionVM] Tailscale enrollment verified: ip=${enrollment.tailscaleIp}`);
 
-  // 9. Return result
+  // 10. Return result
   const result: ProvisionVMResult = {
     serverId,
     serverIp,
     tailscaleIp: enrollment.tailscaleIp,
     serverName,
+    usedSnapshot: isSnapshot,
   };
 
   console.log("[ProvisionVM] Provisioning complete:", result);
@@ -130,6 +182,7 @@ async function main() {
     console.log(`::set-output name=server_ip::${result.serverIp}`);
     console.log(`::set-output name=tailscale_ip::${result.tailscaleIp}`);
     console.log(`::set-output name=server_name::${result.serverName}`);
+    console.log(`::set-output name=used_snapshot::${result.usedSnapshot}`);
 
     // Also write to GITHUB_OUTPUT for modern Actions
     const fs = await import("fs");
@@ -139,6 +192,7 @@ async function main() {
       fs.appendFileSync(outputFile, `server_ip=${result.serverIp}\n`);
       fs.appendFileSync(outputFile, `tailscale_ip=${result.tailscaleIp}\n`);
       fs.appendFileSync(outputFile, `server_name=${result.serverName}\n`);
+      fs.appendFileSync(outputFile, `used_snapshot=${result.usedSnapshot}\n`);
     }
   } catch (error) {
     console.error("[ProvisionVM] Fatal error:", error);
