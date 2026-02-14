@@ -7,6 +7,8 @@ import { agents } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { createAgentSchema } from "@/lib/validators/agent";
+import { getUserSubscription } from "@/lib/subscription";
+import { createCheckoutSession } from "@/lib/actions/stripe";
 
 export async function createAgent(formData: unknown) {
   const user = await getCurrentUser();
@@ -14,7 +16,7 @@ export async function createAgent(formData: unknown) {
 
   const parsed = createAgentSchema.parse(formData);
 
-  await db.insert(agents).values({
+  const [agent] = await db.insert(agents).values({
     userId: user.id,
     name: parsed.name,
     description: parsed.description,
@@ -23,9 +25,16 @@ export async function createAgent(formData: unknown) {
     heartbeatEnabled: parsed.heartbeatEnabled,
     heartbeatCron: parsed.heartbeatCron,
     status: "draft",
-  });
+  }).returning();
 
-  redirect("/agents");
+  // If user has active subscription, go to agent page to deploy
+  // If not, route to Stripe checkout with agentId metadata
+  const subscription = await getUserSubscription(user.id);
+  if (subscription?.isActive) {
+    redirect(`/agents/${agent.id}`);
+  } else {
+    await createCheckoutSession(agent.id);
+  }
 }
 
 export async function updateAgent(id: string, formData: unknown) {
