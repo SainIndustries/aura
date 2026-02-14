@@ -14,49 +14,112 @@ jobs:
 
       - name: Setup SSH key
         run: |
-          mkdir -p /home/runner/.ssh
-          echo "${{ secrets.HETZNER_SSH_PRIVATE_KEY }}" > /home/runner/.ssh/id_ed25519
-          chmod 600 /home/runner/.ssh/id_ed25519
-          echo "SSH key fingerprint:"
-          ssh-keygen -lf /home/runner/.ssh/id_ed25519
+          mkdir -p ~/.ssh
+          echo "${{ secrets.HETZNER_SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
 
-      - name: Debug Hetzner API
+      - name: Create VM and Snapshot
         env:
           HETZNER_API_TOKEN: ${{ secrets.HETZNER_API_TOKEN }}
         run: |
-          echo "Checking SSH keys in Hetzner project..."
-          curl -s -H "Authorization: Bearer $HETZNER_API_TOKEN" "https://api.hetzner.cloud/v1/ssh_keys" | jq '.ssh_keys[] | {id, name}'
+          set -x
           
-          echo "Checking available locations..."
-          curl -s -H "Authorization: Bearer $HETZNER_API_TOKEN" "https://api.hetzner.cloud/v1/locations" | jq '.locations[].name'
-
-      - name: Build Snapshot
-        env:
-          HETZNER_API_TOKEN: ${{ secrets.HETZNER_API_TOKEN }}
-          SSH_PRIVATE_KEY_PATH: /home/runner/.ssh/id_ed25519
-        run: |
-          chmod +x src/scripts/build-snapshot.sh
+          # Get SSH key ID
+          SSH_KEY_ID=$(curl -s -H "Authorization: Bearer $HETZNER_API_TOKEN" \
+            "https://api.hetzner.cloud/v1/ssh_keys" | jq -r '.ssh_keys[0].id')
+          echo "Using SSH Key ID: $SSH_KEY_ID"
           
-          # Get the actual SSH key ID from the API
-          SSH_KEY_ID=$(curl -s -H "Authorization: Bearer $HETZNER_API_TOKEN" "https://api.hetzner.cloud/v1/ssh_keys" | jq -r '.ssh_keys[0].id')
-          echo "Using SSH Key ID from API: $SSH_KEY_ID"
-          export HETZNER_SSH_KEY_ID=$SSH_KEY_ID
+          # Create server
+          echo "Creating server..."
+          CREATE_RESP=$(curl -s -X POST \
+            -H "Authorization: Bearer $HETZNER_API_TOKEN" \
+            -H "Content-Type: application/json" \
+            "https://api.hetzner.cloud/v1/servers" \
+            -d "{
+              \"name\": \"snapshot-builder-$(date +%s)\",
+              \"server_type\": \"cpx11\",
+              \"image\": \"ubuntu-22.04\",
+              \"location\": \"ash\",
+              \"ssh_keys\": [$SSH_KEY_ID],
+              \"start_after_create\": true
+            }")
           
-          ./src/scripts/build-snapshot.sh 2>&1 | tee snapshot-output.txt
+          SERVER_ID=$(echo "$CREATE_RESP" | jq -r '.server.id')
+          SERVER_IP=$(echo "$CREATE_RESP" | jq -r '.server.public_net.ipv4.ip')
+          echo "Server ID: $SERVER_ID, IP: $SERVER_IP"
           
-          # Check if snapshot was created
-          if grep -q "SNAPSHOT_ID=" snapshot-output.txt; then
-            SNAPSHOT_ID=$(grep "SNAPSHOT_ID=" snapshot-output.txt | cut -d= -f2)
-            echo "Created snapshot: $SNAPSHOT_ID"
-            echo "SNAPSHOT_ID=$SNAPSHOT_ID" >> $GITHUB_OUTPUT
-          else
-            echo "ERROR: Snapshot creation failed"
-            cat snapshot-output.txt
+          if [[ "$SERVER_ID" == "null" ]]; then
+            echo "Failed to create server:"
+            echo "$CREATE_RESP" | jq .
             exit 1
           fi
-
-      - name: Summary
-        run: |
-          echo "## Snapshot Build Complete" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          cat snapshot-output.txt >> $GITHUB_STEP_SUMMARY
+          
+          # Wait for server
+          echo "Waiting for server to be ready..."
+          sleep 60
+          
+          # Configure server via SSH
+          echo "Configuring server..."
+          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=30 root@$SERVER_IP << 'ENDSSH'
+            set -ex
+            apt-get update
+            apt-get install -y docker.io docker-compose-v2 fail2ban ufw
+            curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+            apt-get install -y nodejs
+            
+            # Setup openclaw user
+            useradd -r -s /usr/sbin/nologin -m -d /opt/openclaw openclaw
+            usermod -aG docker openclaw
+            mkdir -p /opt/openclaw/config
+            chown -R openclaw:openclaw /opt/openclaw
+            
+            # Setup UFW
+            ufw default deny incoming
+            ufw default allow outgoing
+            ufw allow ssh
+            ufw allow 41641/udp
+            ufw --force enable
+            
+            # Cleanup for snapshot
+            apt-get clean
+            rm -rf /var/lib/apt/lists/*
+            rm -rf /tmp/*
+            history -c
+          ENDSSH
+          
+          # Power off
+          echo "Powering off server..."
+          curl -s -X POST \
+            -H "Authorization: Bearer $HETZNER_API_TOKEN" \
+            "https://api.hetzner.cloud/v1/servers/$SERVER_ID/actions/poweroff"
+          
+          sleep 30
+          
+          # Create snapshot
+          echo "Creating snapshot..."
+          SNAPSHOT_NAME="aura-base-$(date +%Y%m%d)"
+          SNAP_RESP=$(curl -s -X POST \
+            -H "Authorization: Bearer $HETZNER_API_TOKEN" \
+            -H "Content-Type: application/json" \
+            "https://api.hetzner.cloud/v1/servers/$SERVER_ID/actions/create_image" \
+            -d "{\"description\": \"$SNAPSHOT_NAME\", \"type\": \"snapshot\"}")
+          
+          SNAPSHOT_ID=$(echo "$SNAP_RESP" | jq -r '.image.id')
+          echo "Snapshot ID: $SNAPSHOT_ID"
+          
+          # Wait for snapshot
+          sleep 60
+          
+          # Delete server
+          echo "Deleting temporary server..."
+          curl -s -X DELETE \
+            -H "Authorization: Bearer $HETZNER_API_TOKEN" \
+            "https://api.hetzner.cloud/v1/servers/$SERVER_ID"
+          
+          echo ""
+          echo "=========================================="
+          echo "SNAPSHOT CREATED: $SNAPSHOT_ID"
+          echo "=========================================="
+          echo ""
+          echo "Add to GitHub Secrets:"
+          echo "  HETZNER_SNAPSHOT_ID=$SNAPSHOT_ID"
