@@ -23,7 +23,7 @@ set -euo pipefail
 TEMP_SERVER_NAME="snapshot-builder-$(date +%Y%m%d%H%M%S)"
 SERVER_TYPE="cpx11"
 BASE_IMAGE="ubuntu-22.04"
-LOCATION="nbg1"
+LOCATION="ash"
 SNAPSHOT_NAME="aura-base-$(date +%Y%m%d)"
 SSH_USER="root"
 SSH_OPTS="-o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR"
