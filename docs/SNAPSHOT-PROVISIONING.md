@@ -1,42 +1,103 @@
-# Snapshot-Based Provisioning
+# Snapshot-Based Provisioning (Hybrid Model)
 
-This document describes the snapshot-based provisioning system for Aura agents, which reduces deployment time from ~8 minutes to ~1-2 minutes.
+This document describes the hybrid provisioning system for Aura agents, which reduces deployment time from ~8 minutes to ~1-2 minutes while maintaining flexibility.
 
 ## Overview
 
-Instead of installing all dependencies (Docker, Node.js, security tools) on every new agent VM, we pre-bake a Hetzner snapshot with everything installed. When deploying a new agent, we:
+The hybrid model combines the speed of pre-baked snapshots with the flexibility of Ansible:
 
-1. Create a VM from the snapshot (already has all software)
-2. Use cloud-init to configure agent-specific settings
-3. Start the agent service
-
-This eliminates the need for Ansible during normal deployments.
+| Component | Snapshot | Ansible |
+|-----------|----------|---------|
+| Docker CE + Compose | ✅ Pre-installed | - |
+| Node.js 20.x | ✅ Pre-installed | - |
+| Tailscale | ✅ Pre-installed | - |
+| fail2ban | ✅ Pre-configured | - |
+| UFW firewall | ✅ Pre-configured | - |
+| openclaw user | ✅ Created | - |
+| Agent env vars | - | ✅ Configured |
+| Agent service | Template | ✅ Enabled/started |
+| Per-agent settings | - | ✅ Dynamic |
 
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    Snapshot Contents                        │
+│                 Snapshot (Pre-baked)                        │
+│                 ~30 seconds to boot                         │
 ├─────────────────────────────────────────────────────────────┤
 │ • Ubuntu 22.04 base                                         │
 │ • Docker CE + Docker Compose                                │
 │ • Node.js 20.x                                              │
 │ • Tailscale (installed, not enrolled)                       │
-│ • fail2ban (configured and enabled)                         │
-│ • UFW firewall (SSH + Tailscale ports open)                 │
+│ • fail2ban (configured and running)                         │
+│ • UFW firewall (SSH + Tailscale ports)                      │
 │ • openclaw user with /opt/openclaw structure                │
-│ • openclaw-agent.service systemd unit                       │
+│ • openclaw-agent.service template                           │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                 Cloud-init (at boot)                        │
+│                 ~30 seconds                                 │
 ├─────────────────────────────────────────────────────────────┤
+│ • Sync system clock                                         │
 │ • Enroll in Tailscale with ephemeral auth key               │
-│ • Write agent.env with AGENT_ID, SERVER_NAME, API_URL       │
-│ • Start openclaw-agent service                              │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│              Ansible (Lightweight Playbook)                 │
+│                 ~30-60 seconds                              │
+├─────────────────────────────────────────────────────────────┤
+│ • Verify pre-installed components                           │
+│ • Create agent.env with AGENT_ID, API_URL, etc.             │
+│ • Enable and start openclaw-agent service                   │
+│ • Final verification                                        │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+## Why Hybrid?
+
+**Pure snapshot approach:**
+- ❌ Requires rebuilding snapshot for any config change
+- ❌ No per-agent customization without cloud-init complexity
+- ❌ Hard to debug configuration issues
+
+**Pure Ansible approach:**
+- ❌ Slow (6-7 minutes for full setup)
+- ❌ Network-dependent (apt installs can fail)
+- ✅ Flexible and debuggable
+
+**Hybrid approach:**
+- ✅ Fast (~1-2 minutes total)
+- ✅ Snapshot only needs rebuilding for infrastructure changes
+- ✅ Ansible handles all agent-specific config
+- ✅ Easy to update agent settings without new snapshot
+- ✅ Familiar debugging with Ansible
+
+## Provisioning Modes
+
+### Snapshot-Hybrid Mode (Fast Path)
+
+When `HETZNER_SNAPSHOT_ID` is set:
+
+| Step | Time | Component |
+|------|------|-----------|
+| VM boot from snapshot | ~30s | Hetzner |
+| Tailscale enrollment | ~30s | cloud-init |
+| Agent configuration | ~30-60s | Ansible (lightweight) |
+| **Total** | **~1-2 min** | |
+
+### Full Mode (Fallback)
+
+When `HETZNER_SNAPSHOT_ID` is NOT set:
+
+| Step | Time | Component |
+|------|------|-----------|
+| VM boot from ubuntu-22.04 | ~30s | Hetzner |
+| Tailscale install + enroll | ~60s | cloud-init |
+| Full configuration | ~6-7 min | Ansible (full playbook) |
+| **Total** | **~8 min** | |
 
 ## Environment Variables
 
@@ -57,23 +118,24 @@ This eliminates the need for Ansible during normal deployments.
 |----------|-------------|
 | `HETZNER_API_TOKEN` | Hetzner Cloud API token |
 | `HETZNER_SSH_KEY_ID` | ID of SSH key in Hetzner |
-| `SSH_PRIVATE_KEY_PATH` | Path to SSH private key (optional, tries ~/.ssh/id_rsa) |
+| `SSH_PRIVATE_KEY_PATH` | Path to SSH private key (optional) |
 
 ## Building a New Snapshot
 
 ### When to Rebuild
 
-Rebuild the snapshot when:
-- Updating base OS packages (security updates)
-- Changing Docker or Node.js versions
-- Modifying security configuration (fail2ban, UFW rules)
-- Updating the openclaw user or directory structure
-- Changing the systemd service file template
+**Rebuild when changing:**
+- Base OS packages (security updates)
+- Docker or Node.js versions
+- Security configuration (fail2ban rules, UFW ports)
+- openclaw user or directory structure
+- systemd service file template
 
-You do NOT need to rebuild when:
-- Deploying new agent code (handled at runtime)
-- Changing agent environment variables
-- Modifying Tailscale tags or settings
+**Don't rebuild for:**
+- Agent environment variables (Ansible handles this)
+- Agent code updates (deployed at runtime)
+- Per-agent customization (Ansible handles this)
+- API URL changes (Ansible handles this)
 
 ### Build Process
 
@@ -87,55 +149,34 @@ You do NOT need to rebuild when:
 2. **Run the build script:**
    ```bash
    cd /path/to/aura
-   chmod +x src/scripts/build-snapshot.sh
    ./src/scripts/build-snapshot.sh
    ```
 
 3. **Update GitHub Secrets:**
-   The script outputs the new snapshot ID. Update `HETZNER_SNAPSHOT_ID` in GitHub Secrets.
-
-### What the Build Script Does
-
-1. Creates a temporary Hetzner VM (cpx11, ubuntu-22.04)
-2. Waits for SSH connectivity
-3. Installs and configures:
-   - Docker CE and Docker Compose
-   - Node.js 20.x
-   - Tailscale (not enrolled)
-   - fail2ban with SSH protection
-   - UFW firewall
-4. Creates the openclaw user and directory structure
-5. Installs the systemd service template
-6. Cleans up caches and logs
-7. Powers off the VM
-8. Creates a Hetzner snapshot
-9. Deletes the temporary VM
-10. Outputs the snapshot ID
+   Set `HETZNER_SNAPSHOT_ID` to the output snapshot ID.
 
 ### Build Time
 
 The build process takes approximately 5-7 minutes.
 
-## Provisioning Modes
+## Ansible Playbooks
 
-### Snapshot Mode (Fast Path)
+### Snapshot Mode: `configure-agent-snapshot.yml`
 
-When `HETZNER_SNAPSHOT_ID` is set:
-- VM created from snapshot (~30 seconds)
-- Cloud-init configures agent settings (~30 seconds)
-- Tailscale enrollment (~30 seconds)
-- Agent service starts (~10 seconds)
+Lightweight playbook that runs in ~30-60 seconds:
+- Waits for SSH and cloud-init
+- Verifies pre-installed components (Docker, Node.js)
+- Creates agent environment file
+- Enables and starts agent service
+- Final verification
 
-**Total time: ~1-2 minutes**
+### Full Mode: `configure-agent.yml`
 
-### Fallback Mode (Slow Path)
-
-When `HETZNER_SNAPSHOT_ID` is NOT set:
-- VM created from ubuntu-22.04 (~30 seconds)
-- Cloud-init installs Tailscale (~1 minute)
-- Ansible configures everything (~6-7 minutes)
-
-**Total time: ~8 minutes**
+Complete playbook that runs in ~6-7 minutes:
+- Full package installation (Docker, Node.js)
+- Security hardening (fail2ban, UFW)
+- User creation
+- All agent configuration
 
 ## Directory Structure on VM
 
@@ -143,78 +184,63 @@ When `HETZNER_SNAPSHOT_ID` is NOT set:
 /opt/openclaw/
 ├── agent/          # Agent code (deployed at runtime)
 │   └── index.js
-├── config/         # Configuration files
-│   ├── agent.env   # Environment variables (created by cloud-init)
-│   └── provisioned_at  # Provisioning metadata
+├── config/
+│   ├── agent.env         # Environment variables (Ansible)
+│   └── provisioned_at    # Provisioning metadata (Ansible)
 └── logs/           # Agent logs (if not using journald)
 ```
 
-## Systemd Service
+## Agent Environment File
 
-The `openclaw-agent.service` is pre-installed in the snapshot:
+Created by Ansible at `/opt/openclaw/config/agent.env`:
 
-```ini
-[Unit]
-Description=OpenClaw Agent Service
-After=network-online.target docker.service
-Wants=network-online.target
-Requires=docker.service
-
-[Service]
-Type=simple
-User=openclaw
-EnvironmentFile=/opt/openclaw/config/agent.env
-ExecStart=/usr/bin/node /opt/openclaw/agent/index.js
-Restart=always
-RestartSec=10
-StandardOutput=journal
-StandardError=journal
-SyslogIdentifier=openclaw-agent
-
-[Install]
-WantedBy=multi-user.target
+```bash
+AGENT_ID=abc123
+SERVER_NAME=agent-abc12345-1234567890
+SERVER_ID=12345678
+API_URL=https://aura.openclaw.ai
+NODE_ENV=production
 ```
 
 ## Troubleshooting
 
-### Snapshot Not Found Error
+### Snapshot Not Found
 
 If provisioning fails with "image not found":
 1. Verify `HETZNER_SNAPSHOT_ID` is correct
-2. Check the snapshot exists in Hetzner Console
-3. Ensure the snapshot is in the same project as the API token
+2. Check snapshot exists in Hetzner Console
+3. Ensure snapshot is in same project as API token
 
-### Cloud-init Timeout
+### Ansible Fails on Snapshot Mode
 
-If cloud-init takes too long:
-1. SSH to the VM and check `/var/log/cloud-init-output.log`
-2. Verify Tailscale auth key is valid
-3. Check network connectivity
+If the lightweight playbook fails:
+1. Check if snapshot is properly built (all components installed)
+2. SSH to VM and verify: `docker --version`, `node --version`
+3. Check `/var/log/cloud-init-output.log` for Tailscale issues
 
 ### Agent Service Won't Start
 
-If the agent service fails to start:
 1. Check journald: `journalctl -u openclaw-agent -f`
-2. Verify `/opt/openclaw/config/agent.env` exists and has correct values
+2. Verify `/opt/openclaw/config/agent.env` exists
 3. Ensure agent code is deployed to `/opt/openclaw/agent/`
 
 ## Migration Guide
 
-### From Ansible-Only to Snapshot
+### From Full Ansible to Hybrid
 
 1. Build initial snapshot: `./src/scripts/build-snapshot.sh`
-2. Test with a single agent deployment
-3. Update `HETZNER_SNAPSHOT_ID` in GitHub Secrets
-4. All subsequent deployments will use the fast path
+2. Note the snapshot ID from output
+3. Set `HETZNER_SNAPSHOT_ID` in GitHub Secrets
+4. Next deployment will use hybrid mode automatically
 
-### Reverting to Ansible-Only
+### Reverting to Full Ansible
 
-Simply remove `HETZNER_SNAPSHOT_ID` from GitHub Secrets. The provisioning system will automatically fall back to the Ansible-based flow.
+Remove `HETZNER_SNAPSHOT_ID` from GitHub Secrets. The system automatically falls back to full Ansible mode.
 
 ## Security Notes
 
-- The snapshot does NOT contain any secrets or credentials
-- Tailscale auth keys are ephemeral and generated per-deployment
-- Agent environment variables are written by cloud-init at boot
-- UFW and fail2ban are pre-configured for security
-- The openclaw user cannot log in (shell is /usr/sbin/nologin)
+- Snapshot contains NO secrets or credentials
+- Tailscale auth keys are ephemeral (generated per-deployment)
+- Agent environment variables are written by Ansible at deploy time
+- UFW and fail2ban are pre-configured in snapshot
+- openclaw user has nologin shell

@@ -84,7 +84,6 @@ jobs:
           HETZNER_SNAPSHOT_ID: ${{ secrets.HETZNER_SNAPSHOT_ID }}
           TAILSCALE_OAUTH_CLIENT_ID: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
           TAILSCALE_OAUTH_CLIENT_SECRET: ${{ secrets.TAILSCALE_OAUTH_CLIENT_SECRET }}
-          AURA_API_URL: ${{ secrets.AURA_API_URL }}
           JOB_ID: ${{ inputs.job_id }}
           AGENT_ID: ${{ inputs.agent_id }}
           REGION: ${{ inputs.region }}
@@ -108,27 +107,21 @@ jobs:
 
           echo "Sent vm_created step callback for job ${{ inputs.job_id }} (snapshot: ${{ steps.provision.outputs.used_snapshot }})"
 
-      # Ansible steps - only run if NOT using snapshot
       - name: Install Ansible
-        if: steps.provision.outputs.used_snapshot != 'true'
         run: |
-          echo "Snapshot not used, installing Ansible for fallback configuration..."
           sudo apt-get update
           sudo apt-get install -y ansible
 
       - name: Install Ansible collections
-        if: steps.provision.outputs.used_snapshot != 'true'
         run: ansible-galaxy collection install -r src/ansible/requirements.yml
 
       - name: Configure SSH key for Ansible
-        if: steps.provision.outputs.used_snapshot != 'true'
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.HETZNER_SSH_PRIVATE_KEY }}" > /tmp/ansible_ssh_key
           chmod 600 /tmp/ansible_ssh_key
 
       - name: Generate Ansible inventory
-        if: steps.provision.outputs.used_snapshot != 'true'
         run: |
           cat > /tmp/inventory.yml <<EOF
           all:
@@ -142,16 +135,21 @@ jobs:
               agent_id: "${{ inputs.agent_id }}"
               server_name: "${{ steps.provision.outputs.server_name }}"
               server_id: "${{ steps.provision.outputs.server_id }}"
+              api_url: "${{ secrets.AURA_API_URL }}"
           EOF
 
       - name: Send Ansible started callback
-        if: steps.provision.outputs.used_snapshot != 'true'
         run: |
+          MODE="full"
+          if [ "${{ steps.provision.outputs.used_snapshot }}" = "true" ]; then
+            MODE="snapshot-hybrid"
+          fi
           BODY=$(jq -n \
             --arg job_id "${{ inputs.job_id }}" \
             --arg status "provisioning" \
             --arg step "ansible_started" \
-            '{job_id: $job_id, status: $status, step: $step}')
+            --arg mode "$MODE" \
+            '{job_id: $job_id, status: $status, step: $step, mode: $mode}')
           SIGNATURE=$(echo -n "$BODY" | openssl dgst -sha256 -hmac "${{ secrets.GITHUB_CALLBACK_SECRET }}" -hex | awk '{print $NF}')
 
           curl -sf -X POST "${{ inputs.callback_url }}" \
@@ -159,25 +157,41 @@ jobs:
             -H "X-Signature: $SIGNATURE" \
             -d "$BODY" || true
 
-          echo "Sent ansible_started step callback for job ${{ inputs.job_id }}"
+          echo "Sent ansible_started step callback for job ${{ inputs.job_id }} (mode: $MODE)"
 
-      - name: Configure VM with Ansible
-        id: configure
+      - name: Configure VM with Ansible (Snapshot Mode)
+        id: configure_snapshot
+        if: steps.provision.outputs.used_snapshot == 'true'
+        run: |
+          echo "Using lightweight snapshot playbook..."
+          ansible-playbook src/ansible/playbooks/configure-agent-snapshot.yml \
+            -i /tmp/inventory.yml \
+            --ssh-common-args='-o StrictHostKeyChecking=accept-new' \
+            -vv
+
+      - name: Configure VM with Ansible (Full Mode)
+        id: configure_full
         if: steps.provision.outputs.used_snapshot != 'true'
         run: |
+          echo "Using full configuration playbook..."
           ansible-playbook src/ansible/playbooks/configure-agent.yml \
             -i /tmp/inventory.yml \
             --ssh-common-args='-o StrictHostKeyChecking=accept-new' \
             -vv
 
       - name: Send Ansible complete callback
-        if: steps.provision.outputs.used_snapshot != 'true' && steps.configure.outcome == 'success'
+        if: success()
         run: |
+          MODE="full"
+          if [ "${{ steps.provision.outputs.used_snapshot }}" = "true" ]; then
+            MODE="snapshot-hybrid"
+          fi
           BODY=$(jq -n \
             --arg job_id "${{ inputs.job_id }}" \
             --arg status "provisioning" \
             --arg step "ansible_complete" \
-            '{job_id: $job_id, status: $status, step: $step}')
+            --arg mode "$MODE" \
+            '{job_id: $job_id, status: $status, step: $step, mode: $mode}')
           SIGNATURE=$(echo -n "$BODY" | openssl dgst -sha256 -hmac "${{ secrets.GITHUB_CALLBACK_SECRET }}" -hex | awk '{print $NF}')
 
           curl -sf -X POST "${{ inputs.callback_url }}" \
@@ -185,55 +199,7 @@ jobs:
             -H "X-Signature: $SIGNATURE" \
             -d "$BODY" || true
 
-          echo "Sent ansible_complete step callback for job ${{ inputs.job_id }}"
-
-      # For snapshot mode, wait for cloud-init and send completion callback
-      - name: Wait for snapshot cloud-init completion
-        if: steps.provision.outputs.used_snapshot == 'true'
-        env:
-          HETZNER_SSH_PRIVATE_KEY: ${{ secrets.HETZNER_SSH_PRIVATE_KEY }}
-        run: |
-          echo "Using snapshot mode - waiting for cloud-init to complete agent configuration..."
-          
-          mkdir -p ~/.ssh
-          echo "$HETZNER_SSH_PRIVATE_KEY" > /tmp/ssh_key
-          chmod 600 /tmp/ssh_key
-          
-          # Wait for cloud-init to complete (max 90 seconds)
-          for i in {1..18}; do
-            if ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 \
-               -i /tmp/ssh_key root@${{ steps.provision.outputs.tailscale_ip }} \
-               "cloud-init status --wait" 2>/dev/null; then
-              echo "Cloud-init completed successfully"
-              break
-            fi
-            echo "Waiting for cloud-init... ($i/18)"
-            sleep 5
-          done
-          
-          # Verify agent service is configured
-          ssh -o StrictHostKeyChecking=accept-new -i /tmp/ssh_key \
-            root@${{ steps.provision.outputs.tailscale_ip }} \
-            "systemctl status openclaw-agent || true && cat /opt/openclaw/config/provisioned_at || true"
-          
-          rm -f /tmp/ssh_key
-
-      - name: Send snapshot config complete callback
-        if: steps.provision.outputs.used_snapshot == 'true'
-        run: |
-          BODY=$(jq -n \
-            --arg job_id "${{ inputs.job_id }}" \
-            --arg status "provisioning" \
-            --arg step "snapshot_config_complete" \
-            '{job_id: $job_id, status: $status, step: $step}')
-          SIGNATURE=$(echo -n "$BODY" | openssl dgst -sha256 -hmac "${{ secrets.GITHUB_CALLBACK_SECRET }}" -hex | awk '{print $NF}')
-
-          curl -sf -X POST "${{ inputs.callback_url }}" \
-            -H "Content-Type: application/json" \
-            -H "X-Signature: $SIGNATURE" \
-            -d "$BODY" || true
-
-          echo "Sent snapshot_config_complete callback for job ${{ inputs.job_id }}"
+          echo "Sent ansible_complete step callback for job ${{ inputs.job_id }} (mode: $MODE)"
 
       - name: Stop heartbeat
         if: always()
@@ -248,7 +214,6 @@ jobs:
         run: |
           rm -f /tmp/ansible_ssh_key
           rm -f /tmp/inventory.yml
-          rm -f /tmp/ssh_key
 
       - name: Send success callback
         if: success()
@@ -295,8 +260,10 @@ jobs:
           FAILED_STEP="unknown"
           if [ "${{ steps.provision.outcome }}" = "failure" ]; then
             FAILED_STEP="provision"
-          elif [ "${{ steps.configure.outcome }}" = "failure" ]; then
-            FAILED_STEP="configure"
+          elif [ "${{ steps.configure_snapshot.outcome }}" = "failure" ]; then
+            FAILED_STEP="configure_snapshot"
+          elif [ "${{ steps.configure_full.outcome }}" = "failure" ]; then
+            FAILED_STEP="configure_full"
           fi
           BODY=$(jq -n \
             --arg job_id "${{ inputs.job_id }}" \

@@ -3,8 +3,11 @@
  * Coordinates Hetzner server creation, Tailscale enrollment, and cloud-init configuration
  * 
  * Supports two provisioning modes:
- * 1. Snapshot mode (fast): Uses pre-baked HETZNER_SNAPSHOT_ID with cloud-init for agent config
- * 2. Fallback mode (slow): Uses ubuntu-22.04 base image + Ansible for full configuration
+ * 1. Snapshot mode (fast): Uses pre-baked HETZNER_SNAPSHOT_ID + lightweight Ansible
+ * 2. Fallback mode (slow): Uses ubuntu-22.04 base image + full Ansible configuration
+ * 
+ * Both modes use Ansible for agent-specific configuration, but snapshot mode
+ * skips the slow infrastructure setup (Docker, Node.js, security hardening).
  */
 
 import { createServer, waitForAction } from "../hetzner";
@@ -56,15 +59,12 @@ function getProvisioningImage(): { image: string; isSnapshot: boolean } {
 /**
  * Provision a VM with Hetzner and Tailscale integration
  * 
- * When HETZNER_SNAPSHOT_ID is set, uses the pre-baked snapshot which includes:
- * - Docker, Node.js 20, fail2ban, UFW
- * - openclaw user and directory structure
- * - Security hardening pre-configured
+ * Hybrid provisioning model:
+ * - Snapshot provides: Docker, Node.js 20, fail2ban, UFW, openclaw user
+ * - Cloud-init provides: Tailscale enrollment
+ * - Ansible provides: Agent-specific config (env vars, service setup)
  * 
- * Cloud-init then configures only agent-specific settings:
- * - Tailscale enrollment
- * - Agent environment variables
- * - Service startup
+ * This gives speed from snapshot + flexibility from Ansible.
  * 
  * @param params - Provisioning parameters
  * @returns Promise<ProvisionVMResult>
@@ -97,21 +97,19 @@ export async function provisionVM(
   let cloudInitConfig: string;
   
   if (isSnapshot) {
-    // Snapshot mode: Only configure agent-specific settings
+    // Snapshot mode: Tailscale already installed, just enroll
     cloudInitConfig = generateSnapshotCloudInitConfig({
       tailscaleAuthKey: authKey,
       hostname: serverName,
-      agentId: agentId,
-      apiUrl: process.env.AURA_API_URL || "https://aura.openclaw.ai",
     });
-    console.log("[ProvisionVM] Generated snapshot-mode cloud-init (agent config only)");
+    console.log("[ProvisionVM] Generated snapshot-mode cloud-init (Tailscale enrollment only)");
   } else {
-    // Fallback mode: Minimal cloud-init, Ansible will handle the rest
+    // Fallback mode: Install Tailscale from scratch
     cloudInitConfig = generateCloudInitConfig({
       tailscaleAuthKey: authKey,
       hostname: serverName,
     });
-    console.log("[ProvisionVM] Generated fallback-mode cloud-init (Tailscale only)");
+    console.log("[ProvisionVM] Generated fallback-mode cloud-init (Tailscale install)");
   }
 
   // 6. Read SSH key ID from environment
@@ -132,7 +130,7 @@ export async function provisionVM(
     labels: {
       provisioning_job_id: jobId,
       agent_id: agentId,
-      provisioning_mode: isSnapshot ? "snapshot" : "fallback",
+      provisioning_mode: isSnapshot ? "snapshot-hybrid" : "full",
     },
   });
 
@@ -150,7 +148,7 @@ export async function provisionVM(
   const enrollment = await verifyEnrollment(serverName);
   console.log(`[ProvisionVM] Tailscale enrollment verified: ip=${enrollment.tailscaleIp}`);
 
-  // 10. Return result
+  // 10. Return result (Ansible will handle agent config)
   const result: ProvisionVMResult = {
     serverId,
     serverIp,
@@ -159,7 +157,8 @@ export async function provisionVM(
     usedSnapshot: isSnapshot,
   };
 
-  console.log("[ProvisionVM] Provisioning complete:", result);
+  console.log("[ProvisionVM] VM provisioning complete, Ansible will configure agent");
+  console.log("[ProvisionVM] Result:", result);
   return result;
 }
 
