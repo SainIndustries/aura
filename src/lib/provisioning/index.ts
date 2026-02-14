@@ -1,7 +1,9 @@
 import { db } from "@/lib/db";
 import { agentInstances, agents } from "@/lib/db/schema";
 import { eq, and, desc, ne } from "drizzle-orm";
-import { simulateProvisioning, simulateTermination } from "./simulator";
+import { enqueueProvisioningJob } from "./queue";
+import { triggerProvisioningWorkflow } from "./github-actions";
+import { stopAgent } from "./lifecycle";
 
 export type ProvisioningStatus = {
   id: string;
@@ -89,9 +91,9 @@ export function getProvisioningSteps(
 }
 
 /**
- * Queue an agent for provisioning
+ * Queue an agent for provisioning via real infrastructure pipeline
  */
-export async function queueAgentProvisioning(agentId: string, region: string = "us-east"): Promise<ProvisioningStatus> {
+export async function queueAgentProvisioning(agentId: string, region: string = "us-east", userId?: string): Promise<ProvisioningStatus> {
   // Check if agent exists
   const agent = await db.query.agents.findFirst({
     where: eq(agents.id, agentId),
@@ -100,6 +102,8 @@ export async function queueAgentProvisioning(agentId: string, region: string = "
   if (!agent) {
     throw new Error("Agent not found");
   }
+
+  const effectiveUserId = userId || agent.userId;
 
   // Check if there's already an active instance
   const existingInstance = await db.query.agentInstances.findFirst({
@@ -127,10 +131,28 @@ export async function queueAgentProvisioning(agentId: string, region: string = "
   console.log(`[Provisioning] Queued agent ${agentId} for provisioning in region ${region}`);
   console.log(`[Provisioning] Instance ${instance.id} created with status: pending`);
 
-  // Start the simulation (non-blocking)
-  simulateProvisioning(instance.id).catch((err) => {
-    console.error(`[Provisioning] Simulation error for instance ${instance.id}:`, err);
-  });
+  // Enqueue provisioning job and trigger GitHub Actions workflow
+  try {
+    const job = await enqueueProvisioningJob({
+      agentId,
+      userId: effectiveUserId,
+      stripeEventId: `manual-${instance.id}`,
+      region,
+    });
+
+    console.log(`[Provisioning] Job ${job.id} enqueued, triggering workflow...`);
+
+    await triggerProvisioningWorkflow(job);
+  } catch (err) {
+    console.error(`[Provisioning] Failed to trigger real pipeline for instance ${instance.id}:`, err);
+    // Update instance to failed so user can retry
+    await db
+      .update(agentInstances)
+      .set({ status: "failed", error: err instanceof Error ? err.message : "Failed to trigger provisioning", updatedAt: new Date() })
+      .where(eq(agentInstances.id, instance.id));
+
+    throw err;
+  }
 
   return instance as ProvisioningStatus;
 }
@@ -184,12 +206,10 @@ export async function stopAgentInstance(agentId: string): Promise<ProvisioningSt
     .returning();
 
   console.log(`[Provisioning] Stopping instance ${instance.id}`);
-  console.log(`[Provisioning] Would call: Hetzner API to delete server ${instance.serverId}`);
-  console.log(`[Provisioning] Would call: Tailscale API to remove device`);
 
-  // Start termination simulation (non-blocking)
-  simulateTermination(instance.id).catch((err) => {
-    console.error(`[Provisioning] Termination simulation error for instance ${instance.id}:`, err);
+  // Use real lifecycle stop (non-blocking)
+  stopAgent(agentId).catch((err) => {
+    console.error(`[Provisioning] Stop error for instance ${instance.id}:`, err);
   });
 
   return updatedInstance as ProvisioningStatus;
