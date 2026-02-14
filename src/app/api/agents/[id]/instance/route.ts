@@ -47,7 +47,7 @@ export async function GET(
       uptime = Math.floor((Date.now() - new Date(instance.startedAt).getTime()) / 1000);
     }
 
-    const steps = getProvisioningSteps(instance.status);
+    const steps = getProvisioningSteps(instance.status, instance.currentStep);
 
     return NextResponse.json({
       instance,
@@ -86,7 +86,7 @@ export async function DELETE(
 
     // Stop the instance
     const instance = await stopAgentInstance(id);
-    const steps = getProvisioningSteps(instance.status);
+    const steps = getProvisioningSteps(instance.status, instance.currentStep);
 
     return NextResponse.json({
       instance,

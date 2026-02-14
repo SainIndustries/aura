@@ -12,6 +12,7 @@ export type ProvisioningStatus = {
   tailscaleIp: string | null;
   region: string | null;
   error: string | null;
+  currentStep: string | null;
   startedAt: Date | null;
   stoppedAt: Date | null;
   createdAt: Date;
@@ -25,9 +26,12 @@ export type ProvisioningStep = {
 };
 
 /**
- * Get the provisioning steps based on current status
+ * Get the provisioning steps based on current status and step
  */
-export function getProvisioningSteps(status: ProvisioningStatus["status"]): ProvisioningStep[] {
+export function getProvisioningSteps(
+  status: ProvisioningStatus["status"],
+  currentStep?: string | null
+): ProvisioningStep[] {
   const steps: ProvisioningStep[] = [
     { id: "queued", label: "Queued", status: "pending" },
     { id: "creating", label: "Creating Server", status: "pending" },
@@ -36,23 +40,46 @@ export function getProvisioningSteps(status: ProvisioningStatus["status"]): Prov
     { id: "running", label: "Running", status: "pending" },
   ];
 
-  const statusToStepIndex: Record<string, number> = {
-    pending: 0,
-    provisioning: 2, // Mid-way through the process
-    running: 4,
-    stopping: 4,
-    stopped: 4,
-    failed: -1,
+  // Map workflow step identifiers to UI step indices (active step)
+  const stepToActiveIndex: Record<string, number> = {
+    vm_created: 2,          // steps 0,1 completed, step 2 active
+    network_configured: 2,  // networking is sub-step of infra setup
+    ansible_started: 3,     // steps 0,1,2 completed, step 3 active
+    ansible_complete: 4,    // steps 0,1,2,3 completed, step 4 active
   };
 
-  const activeIndex = statusToStepIndex[status] ?? 0;
+  // Determine active step index based on status and currentStep
+  let activeIndex: number;
 
-  if (status === "failed") {
-    // Mark last step as error
-    return steps.map((step, i) => ({
-      ...step,
-      status: i < 2 ? "completed" : i === 2 ? "error" : "pending",
-    }));
+  if (status === "pending") {
+    activeIndex = 0; // Queued is active
+  } else if (status === "provisioning") {
+    if (currentStep && stepToActiveIndex[currentStep] !== undefined) {
+      // Use real step data
+      activeIndex = stepToActiveIndex[currentStep];
+    } else {
+      // Backward compatible: assume step 1 active (Creating Server)
+      activeIndex = 1;
+    }
+  } else if (status === "running" || status === "stopping" || status === "stopped") {
+    activeIndex = 5; // All steps completed (activeIndex > last step index)
+  } else if (status === "failed") {
+    if (currentStep && stepToActiveIndex[currentStep] !== undefined) {
+      // Mark the step where failure occurred as error
+      const errorIndex = stepToActiveIndex[currentStep];
+      return steps.map((step, i) => ({
+        ...step,
+        status: i < errorIndex ? "completed" : i === errorIndex ? "error" : "pending",
+      }));
+    } else {
+      // Fallback: error at step 2 (Installing Dependencies)
+      return steps.map((step, i) => ({
+        ...step,
+        status: i < 2 ? "completed" : i === 2 ? "error" : "pending",
+      }));
+    }
+  } else {
+    activeIndex = 0;
   }
 
   return steps.map((step, i) => ({

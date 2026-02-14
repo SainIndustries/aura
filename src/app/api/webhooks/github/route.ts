@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
-import { updateJobStatus, recordHeartbeat, completeProvisioningWithMetadata } from "@/lib/provisioning/queue";
+import { updateJobStatus, recordHeartbeat, completeProvisioningWithMetadata, updateProvisioningStep } from "@/lib/provisioning/queue";
 import { rollbackFailedProvision } from "@/lib/provisioning/lifecycle";
 
 function verifySignature(body: string, signature: string | null): boolean {
@@ -42,6 +42,7 @@ export async function POST(request: Request) {
     job_id: string;
     status?: "provisioning" | "running" | "failed";
     type?: "heartbeat";
+    step?: string;
     workflow_run_id?: string;
     error?: string;
     failed_step?: string;
@@ -63,10 +64,18 @@ export async function POST(request: Request) {
   }
 
   try {
-    // Handle heartbeat vs status update
+    // Handle heartbeat vs step update vs status update
     if (payload.type === "heartbeat") {
       await recordHeartbeat(payload.job_id);
       console.log(`[GitHub Callback] Heartbeat for job ${payload.job_id}`);
+    } else if (payload.status === "provisioning" && payload.step) {
+      // Handle granular step progress
+      await updateProvisioningStep({
+        jobId: payload.job_id,
+        step: payload.step,
+      });
+      console.log(`[GitHub Callback] Job ${payload.job_id} step -> ${payload.step}`);
+      return NextResponse.json({ received: true });
     } else if (payload.status) {
       // Special handling for "running" status with VM metadata
       if (payload.status === "running" && payload.server_id && payload.server_ip && payload.tailscale_ip) {
