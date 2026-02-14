@@ -1,0 +1,1 @@
+ALTER TABLE "agent_instances" ADD COLUMN "current_step" text;

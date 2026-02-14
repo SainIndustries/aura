@@ -233,6 +233,53 @@ export async function getJobByAgentId(
 }
 
 /**
+ * Update provisioning step for granular progress tracking
+ */
+export async function updateProvisioningStep(params: {
+  jobId: string;
+  step: string;
+  metadata?: Record<string, unknown>;
+}): Promise<void> {
+  const { jobId, step } = params;
+
+  // Get the job to find agentId
+  const [job] = await db
+    .select()
+    .from(provisioningJobs)
+    .where(eq(provisioningJobs.id, jobId))
+    .limit(1);
+
+  if (!job) {
+    console.warn(`[Queue] updateProvisioningStep: job not found: ${jobId}`);
+    return;
+  }
+
+  // Find the most recent non-terminal instance for this agent
+  const instance = await db.query.agentInstances.findFirst({
+    where: and(
+      eq(agentInstances.agentId, job.agentId),
+      inArray(agentInstances.status, ["pending", "provisioning"])
+    ),
+    orderBy: [desc(agentInstances.createdAt)],
+  });
+
+  if (!instance) {
+    console.warn(`[Queue] updateProvisioningStep: no active instance for agent ${job.agentId}`);
+    return;
+  }
+
+  await db
+    .update(agentInstances)
+    .set({
+      currentStep: step,
+      updatedAt: new Date(),
+    })
+    .where(eq(agentInstances.id, instance.id));
+
+  console.log(`[Queue] Updated instance ${instance.id} step: ${step}`);
+}
+
+/**
  * Complete provisioning with VM metadata
  * Updates job status to "running", creates/updates agent instance, and sets agent to "active"
  */
@@ -274,6 +321,7 @@ export async function completeProvisioningWithMetadata(params: {
         serverIp: metadata.serverIp,
         tailscaleIp: metadata.tailscaleIp,
         region: job.region,
+        currentStep: null,
         startedAt: new Date(),
         updatedAt: new Date(),
       })
@@ -286,6 +334,7 @@ export async function completeProvisioningWithMetadata(params: {
       serverIp: metadata.serverIp,
       tailscaleIp: metadata.tailscaleIp,
       region: job.region,
+      currentStep: null,
       startedAt: new Date(),
     });
   }

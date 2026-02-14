@@ -239,6 +239,7 @@ export const agentInstances = pgTable("agent_instances", {
   tailscaleIp: text("tailscale_ip"),
   region: text("region").default("us-east"),
   error: text("error"),
+  currentStep: text("current_step"),
   startedAt: timestamp("started_at", { withTimezone: true }),
   stoppedAt: timestamp("stopped_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })
