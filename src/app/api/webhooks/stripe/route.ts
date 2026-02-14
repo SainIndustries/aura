@@ -44,6 +44,10 @@ export async function POST(request: Request) {
         }
 
         // 2. NEW: Queue provisioning job (idempotent)
+        // NOTE: This code is currently dormant. The current business model uses
+        // subscription-gated provisioning (user subscribes in Settings, then can
+        // deploy unlimited agents via Deploy button). This agentId metadata flow
+        // is reserved for future per-agent billing if the business model changes.
         const agentId = session.metadata?.agentId;
         const userId = session.metadata?.userId;
         const region = session.metadata?.region || "us-east";

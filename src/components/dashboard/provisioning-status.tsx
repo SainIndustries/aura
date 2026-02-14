@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
 import {
   Server,
   Play,
@@ -95,6 +96,7 @@ export function ProvisioningStatus({ agentId }: ProvisioningStatusProps) {
   const [deploying, setDeploying] = useState(false);
   const [stopping, setStopping] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorCode, setErrorCode] = useState<string | null>(null);
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -155,6 +157,7 @@ export function ProvisioningStatus({ agentId }: ProvisioningStatusProps) {
         setSteps(data.steps);
       } else {
         setError(data.error || "Failed to deploy agent");
+        setErrorCode(data.errorCode || null);
       }
     } catch (err) {
       console.error("Error deploying:", err);
@@ -236,7 +239,14 @@ export function ProvisioningStatus({ agentId }: ProvisioningStatusProps) {
           )}
 
           {error && (
-            <p className="text-sm text-destructive">{error}</p>
+            <div className="space-y-2">
+              <p className="text-sm text-destructive">{error}</p>
+              {errorCode === "NO_ACTIVE_SUBSCRIPTION" && (
+                <Button variant="outline" size="sm" asChild>
+                  <Link href="/settings">Go to Settings</Link>
+                </Button>
+              )}
+            </div>
           )}
 
           <Button
