@@ -193,6 +193,7 @@ async function streamFromOpenClaw(
 
   // Tool-calling loop (non-streaming)
   if (options?.tools && options?.googleAccessToken) {
+    console.log(`[Chat] OpenClaw: sending ${options.tools.length} tools with Google token`);
     let iterations = 0;
     while (iterations < 3) {
       const res = await fetch(url, {
@@ -222,6 +223,7 @@ async function streamFromOpenClaw(
       }
 
       const choice = (data as { choices?: { message?: { content?: string; tool_calls?: ToolCall[] } }[] }).choices?.[0]?.message;
+      console.log(`[Chat] OpenClaw response: tool_calls=${choice?.tool_calls?.length ?? 0}, content=${choice?.content?.slice(0, 100) ?? "(none)"}`);
       if (!choice?.tool_calls?.length) break;
 
       allMessages.push(choice as Record<string, unknown>);
@@ -444,16 +446,22 @@ export async function POST(request: NextRequest) {
   // If we have a running instance, use its identity. Otherwise look up the agent for fallback LLM.
   let agentName = instance?.agentName;
   let agentPersonality = instance?.agentPersonality;
-  if (!instance && agentId && user) {
+  let agentGoogleEnabled = false;
+  if (agentId && user) {
     const agentRecord = await db.query.agents.findFirst({
       where: and(eq(agents.id, agentId), eq(agents.userId, user.id)),
     });
     if (agentRecord) {
-      agentName = agentRecord.name;
-      agentPersonality = agentRecord.personality;
+      if (!instance) {
+        agentName = agentRecord.name;
+        agentPersonality = agentRecord.personality;
+      }
+      const agentIntegrations = (agentRecord.integrations as Record<string, unknown>) ?? {};
+      agentGoogleEnabled = !!agentIntegrations.google;
     }
   }
-  const hasGoogleTools = !!googleAccessToken;
+  // Only pass Google tools if the agent has Google enabled AND user has valid OAuth tokens
+  const hasGoogleTools = agentGoogleEnabled && !!googleAccessToken;
 
   // Build SSE response stream
   const stream = new ReadableStream({

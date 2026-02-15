@@ -2,10 +2,16 @@
 
 import { createContext, useContext, useEffect, useState, useCallback, useMemo } from "react";
 
+interface AgentIntegrations {
+  google: boolean;
+  slack: boolean;
+}
+
 interface AgentInfo {
   id: string;
   name: string;
   running: boolean;
+  integrations: AgentIntegrations;
 }
 
 interface AgentStatusContextType {
@@ -14,6 +20,7 @@ interface AgentStatusContextType {
   agents: AgentInfo[];
   selectedAgentId: string | null;
   setSelectedAgentId: (id: string) => void;
+  googleAuthorized: boolean;
   refresh: () => Promise<void>;
 }
 
@@ -23,6 +30,7 @@ export function AgentStatusProvider({ children }: { children: React.ReactNode })
   const [hasRunningAgent, setHasRunningAgent] = useState<boolean | null>(null);
   const [agents, setAgents] = useState<AgentInfo[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
+  const [googleAuthorized, setGoogleAuthorized] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -30,8 +38,14 @@ export function AgentStatusProvider({ children }: { children: React.ReactNode })
       if (res.ok) {
         const data = await res.json();
         setHasRunningAgent(data.openclaw?.running ?? false);
+        setGoogleAuthorized(data.google?.connected ?? false);
 
-        const agentsList: AgentInfo[] = data.agents ?? [];
+        const agentsList: AgentInfo[] = (data.agents ?? []).map((a: Record<string, unknown>) => ({
+          id: a.id as string,
+          name: a.name as string,
+          running: a.running as boolean,
+          integrations: (a.integrations as AgentIntegrations) ?? { google: false, slack: false },
+        }));
         setAgents(agentsList);
 
         // Auto-select: if current selection is missing from list, pick first running (or first overall)
@@ -56,8 +70,8 @@ export function AgentStatusProvider({ children }: { children: React.ReactNode })
   }, [agents, selectedAgentId]);
 
   const value = useMemo(
-    () => ({ hasRunningAgent, agentName, agents, selectedAgentId, setSelectedAgentId, refresh }),
-    [hasRunningAgent, agentName, agents, selectedAgentId, refresh]
+    () => ({ hasRunningAgent, agentName, agents, selectedAgentId, setSelectedAgentId, googleAuthorized, refresh }),
+    [hasRunningAgent, agentName, agents, selectedAgentId, googleAuthorized, refresh]
   );
 
   return (
@@ -76,6 +90,7 @@ export function useAgentStatus() {
       agents: [] as AgentInfo[],
       selectedAgentId: null,
       setSelectedAgentId: () => {},
+      googleAuthorized: false,
       refresh: async () => {},
     };
   }

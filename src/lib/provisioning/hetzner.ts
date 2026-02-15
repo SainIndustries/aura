@@ -314,7 +314,7 @@ async function waitForGateway(
   serverIp: string,
   gatewayToken: string,
   instanceId: string,
-  timeoutMs: number = 300_000 // 5 minutes — cloud-init can take a while
+  timeoutMs: number = 480_000 // 8 minutes — cloud-init can take a while on small VMs
 ): Promise<void> {
   const start = Date.now();
   const pollIntervalMs = 5_000;
@@ -351,7 +351,7 @@ async function waitForGateway(
     await new Promise((r) => setTimeout(r, pollIntervalMs));
   }
 
-  throw new Error(`Gateway at ${serverIp} did not become reachable within ${timeoutMs / 1000}s`);
+  throw new Error(`Gateway at ${serverIp} did not become reachable within ${timeoutMs / 1000}s. The server may need more time to install software. Please retry.`);
 }
 
 /**
@@ -402,6 +402,9 @@ function friendlyHetznerError(message: string): string {
   }
   if (message.includes("rate_limit_exceeded")) {
     return "Too many requests. Please wait a moment and try again.";
+  }
+  if (message.includes("did not become reachable")) {
+    return "Server setup took too long. This can happen with slow network conditions. Please retry — the next attempt usually succeeds.";
   }
   return message;
 }
@@ -514,6 +517,19 @@ export async function provisionServer(instanceId: string): Promise<void> {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown provisioning error";
     console.error(`[Hetzner] Provisioning failed for instance ${instanceId}:`, message);
+
+    // Clean up the Hetzner server to prevent orphaned billing
+    const failedInstance = await db.query.agentInstances.findFirst({
+      where: (t, { eq }) => eq(t.id, instanceId),
+    });
+    if (failedInstance?.serverId) {
+      try {
+        console.log(`[Hetzner] Cleaning up failed server ${failedInstance.serverId}`);
+        await deleteServer(failedInstance.serverId);
+      } catch (cleanupErr) {
+        console.error(`[Hetzner] Failed to cleanup server ${failedInstance.serverId}:`, cleanupErr);
+      }
+    }
 
     await updateInstanceStatus(instanceId, {
       status: "failed",

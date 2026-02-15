@@ -124,8 +124,6 @@ export default function ChatPage() {
   const [toolStatus, setToolStatus] = useState<string | null>(null);
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const [googleConnected, setGoogleConnected] = useState<boolean | null>(null);
-  const [slackConnected, setSlackConnected] = useState<boolean | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<ISpeechRecognition | null>(null);
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -139,27 +137,10 @@ export default function ChatPage() {
     scrollToBottom();
   }, [messages]);
 
-  // Check integration status (Google + Slack)
-  const checkIntegrations = useCallback(async () => {
-    try {
-      const res = await fetch("/api/integrations/status");
-      if (res.ok) {
-        const data = await res.json();
-        const gConn = data.google?.connected ?? false;
-        const sConn = data.slack?.connected ?? false;
-        setGoogleConnected(gConn);
-        setSlackConnected(sConn);
-        return { google: gConn, slack: sConn };
-      }
-    } catch {
-      // Silently fail
-    }
-    return null;
-  }, []);
-
-  useEffect(() => {
-    if (hasRunningAgent) checkIntegrations();
-  }, [hasRunningAgent, checkIntegrations]);
+  // Derive per-agent integration status from provider
+  const selectedAgent = agents.find((a) => a.id === selectedAgentId);
+  const agentGoogleEnabled = selectedAgent?.integrations.google ?? false;
+  const agentSlackEnabled = selectedAgent?.integrations.slack ?? false;
 
   // Cleanup polling on unmount
   useEffect(() => {
@@ -168,12 +149,45 @@ export default function ChatPage() {
     };
   }, []);
 
+  // Enable Google integration for the currently selected agent (called after OAuth completes)
+  const enableGoogleForAgent = useCallback(async () => {
+    if (!selectedAgentId) return;
+    try {
+      const res = await fetch(`/api/agents/${selectedAgentId}/integrations/google`, { method: "POST" });
+      if (res.ok) {
+        await refresh();
+      }
+    } catch {
+      // Silently fail
+    }
+  }, [selectedAgentId, refresh]);
+
+  const connectGoogleForAgent = useCallback(() => {
+    if (!selectedAgentId) return;
+
+    // Always open OAuth popup so user explicitly authorizes each agent
+    oauthPopupRef.current = window.open(
+      "/api/integrations/google",
+      "connect-google",
+      "width=600,height=700,left=200,top=100"
+    );
+
+    // Poll until popup closes (user completed or dismissed OAuth)
+    if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+    pollTimerRef.current = setInterval(async () => {
+      if (oauthPopupRef.current?.closed) {
+        clearInterval(pollTimerRef.current!);
+        pollTimerRef.current = null;
+        // Refresh to pick up new tokens, then enable for this agent
+        await refresh();
+        await enableGoogleForAgent();
+      }
+    }, 1000);
+  }, [selectedAgentId, enableGoogleForAgent, refresh]);
+
   const openOAuthPopup = useCallback(
-    (provider: "google" | "slack") => {
-      const url =
-        provider === "google"
-          ? "/api/integrations/google"
-          : "/api/integrations/slack";
+    (provider: "slack") => {
+      const url = "/api/integrations/slack";
 
       oauthPopupRef.current = window.open(
         url,
@@ -184,24 +198,10 @@ export default function ChatPage() {
       // Poll for connection every 2s
       if (pollTimerRef.current) clearInterval(pollTimerRef.current);
       pollTimerRef.current = setInterval(async () => {
-        const status = await checkIntegrations();
-        if (!status) return;
-
-        const connected =
-          provider === "google" ? status.google : status.slack;
-
-        if (connected) {
-          if (pollTimerRef.current) {
-            clearInterval(pollTimerRef.current);
-            pollTimerRef.current = null;
-          }
-          if (oauthPopupRef.current && !oauthPopupRef.current.closed) {
-            oauthPopupRef.current.close();
-          }
-        }
+        await refresh();
       }, 2000);
     },
-    [checkIntegrations]
+    [refresh]
   );
 
   // Initialize speech recognition
@@ -473,13 +473,13 @@ export default function ChatPage() {
           <p className="text-sm text-aura-text-dim">Your AI Agent</p>
         </div>
         <div className="ml-auto flex items-center gap-2">
-          {googleConnected && (
+          {agentGoogleEnabled && (
             <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-aura-accent/10 text-aura-accent text-xs font-medium">
               <Mail className="w-3 h-3" />
               Gmail & Calendar
             </div>
           )}
-          {slackConnected && (
+          {agentSlackEnabled && (
             <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-aura-purple/10 text-aura-purple text-xs font-medium">
               <Hash className="w-3 h-3" />
               Slack
@@ -576,17 +576,17 @@ export default function ChatPage() {
       <div className="p-4 border-t border-aura-border">
         {/* Tool connection buttons */}
         <div className="flex items-center gap-2 mb-3 flex-wrap">
-          {googleConnected === false && (
+          {!agentGoogleEnabled && (
             <button
               type="button"
-              onClick={() => openOAuthPopup("google")}
+              onClick={connectGoogleForAgent}
               className="flex items-center gap-1.5 rounded-full border border-aura-border px-3.5 py-1.5 text-xs font-medium text-aura-text-light hover:border-aura-accent hover:text-aura-accent transition-colors"
             >
               <Mail className="w-3.5 h-3.5" />
               Connect Gmail
             </button>
           )}
-          {slackConnected === false && (
+          {!agentSlackEnabled && (
             <button
               type="button"
               onClick={() => openOAuthPopup("slack")}

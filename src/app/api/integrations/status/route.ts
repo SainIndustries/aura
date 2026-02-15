@@ -31,13 +31,20 @@ export async function GET() {
         agent.status === "active" ||
         (agent.instances ?? []).some((inst) => inst.status === "running")
       )
-      .map((agent) => ({
-        id: agent.id,
-        name: agent.name,
-        running: (agent.instances ?? []).some(
-          (inst) => inst.status === "running"
-        ),
-      }));
+      .map((agent) => {
+        const agentIntegrations = (agent.integrations as Record<string, unknown>) ?? {};
+        return {
+          id: agent.id,
+          name: agent.name,
+          running: (agent.instances ?? []).some(
+            (inst) => inst.status === "running"
+          ),
+          integrations: {
+            google: !!agentIntegrations.google && !!googleIntegration,
+            slack: !!agentIntegrations.slack,
+          },
+        };
+      });
 
     const firstRunning = agentsList.find((a) => a.running);
 
