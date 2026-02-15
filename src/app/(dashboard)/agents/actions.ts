@@ -7,7 +7,6 @@ import { agents } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { createAgentSchema } from "@/lib/validators/agent";
-import { getUserSubscription } from "@/lib/subscription";
 import { createCheckoutSession } from "@/lib/actions/stripe";
 
 export async function createAgent(formData: unknown) {
@@ -33,14 +32,8 @@ export async function createAgent(formData: unknown) {
     },
   }).returning();
 
-  // If user has active subscription, skip Stripe and go straight to deploying
-  // If not, route to Stripe checkout (which redirects back to deploying on success)
-  const subscription = await getUserSubscription(user.id);
-  if (subscription?.isActive) {
-    redirect(`/onboarding?agentId=${agent.id}&success=true`);
-  } else {
-    await createCheckoutSession(agent.id);
-  }
+  // Every agent requires its own $199/mo subscription via Stripe
+  await createCheckoutSession(agent.id);
 }
 
 export async function updateAgent(id: string, formData: unknown) {
