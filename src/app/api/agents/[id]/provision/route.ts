@@ -8,6 +8,7 @@ import {
   queueAgentProvisioning,
   getProvisioningStatus,
   getProvisioningSteps,
+  progressInstanceProvisioning,
 } from "@/lib/provisioning";
 
 export async function POST(
@@ -91,7 +92,7 @@ export async function GET(
     }
 
     // Get current provisioning status
-    const instance = await getProvisioningStatus(id);
+    let instance = await getProvisioningStatus(id);
 
     if (!instance) {
       return NextResponse.json({
@@ -100,7 +101,13 @@ export async function GET(
       });
     }
 
-    const steps = getProvisioningSteps(instance.status);
+    // Drive provisioning forward if still in progress
+    if (instance.status === "pending" || instance.status === "provisioning") {
+      await progressInstanceProvisioning(instance.id);
+      instance = (await getProvisioningStatus(id))!;
+    }
+
+    const steps = getProvisioningSteps(instance.status, instance.currentStep);
 
     return NextResponse.json({
       instance,

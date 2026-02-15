@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import {
   CheckCircle2,
@@ -78,7 +78,8 @@ export function StepDeploying({ agentId }: { agentId: string }) {
   const [state, setState] = useState<DeployState>("deploying");
   const [steps, setSteps] = useState<ProvisioningStep[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [deployTriggered, setDeployTriggered] = useState(false);
+  const deployTriggeredRef = useRef(false);
+  const [retryCount, setRetryCount] = useState(0);
   const { quote, visible } = useRotatingQuote();
   const { display: elapsedDisplay } = useElapsedTime(state === "deploying");
 
@@ -100,10 +101,10 @@ export function StepDeploying({ agentId }: { agentId: string }) {
     }
   }, [agentId]);
 
-  // Trigger deploy once
+  // Trigger deploy once (ref survives React strict mode double-mount)
   useEffect(() => {
-    if (deployTriggered) return;
-    setDeployTriggered(true);
+    if (deployTriggeredRef.current) return;
+    deployTriggeredRef.current = true;
 
     (async () => {
       try {
@@ -127,7 +128,7 @@ export function StepDeploying({ agentId }: { agentId: string }) {
         setError("Network error");
       }
     })();
-  }, [agentId, deployTriggered, fetchStatus]);
+  }, [agentId, retryCount, fetchStatus]);
 
   // Poll while deploying
   useEffect(() => {
@@ -266,8 +267,9 @@ export function StepDeploying({ agentId }: { agentId: string }) {
               <button
                 onClick={() => {
                   setState("deploying");
-                  setDeployTriggered(false);
+                  deployTriggeredRef.current = false;
                   setError(null);
+                  setRetryCount((c) => c + 1);
                 }}
                 className="rounded-full bg-aura-accent text-white px-6 py-2.5 text-sm font-medium hover:bg-aura-accent-bright transition-all"
               >

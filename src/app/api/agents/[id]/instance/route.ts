@@ -7,6 +7,7 @@ import {
   getProvisioningStatus,
   stopAgentInstance,
   getProvisioningSteps,
+  progressInstanceProvisioning,
 } from "@/lib/provisioning";
 
 export async function GET(
@@ -31,7 +32,7 @@ export async function GET(
     }
 
     // Get current instance
-    const instance = await getProvisioningStatus(id);
+    let instance = await getProvisioningStatus(id);
 
     if (!instance) {
       return NextResponse.json({
@@ -39,6 +40,13 @@ export async function GET(
         steps: null,
         uptime: null,
       });
+    }
+
+    // Drive provisioning forward one step if still in progress
+    if (instance.status === "pending" || instance.status === "provisioning") {
+      await progressInstanceProvisioning(instance.id);
+      // Re-fetch after progression to return updated status
+      instance = (await getProvisioningStatus(id))!;
     }
 
     // Calculate uptime if running

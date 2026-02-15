@@ -1,7 +1,7 @@
 import { randomBytes } from "crypto";
 import { db } from "@/lib/db";
-import { agents } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { agents, agentInstances } from "@/lib/db/schema";
+import { eq, and } from "drizzle-orm";
 import { updateInstanceStatus } from "./index";
 
 // ---------------------------------------------------------------------------
@@ -410,17 +410,17 @@ function friendlyHetznerError(message: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Public API — drop-in replacements for simulator functions
+// Public API
 // ---------------------------------------------------------------------------
 
 /**
- * Provision a real Hetzner VM with OpenClaw installed via cloud-init.
- * Replaces simulateProvisioning() from simulator.ts.
+ * Create a Hetzner server for the given instance (fast — single API call).
+ * Called once during the "pending" → "provisioning" transition.
+ * Does NOT wait for the server to boot or for cloud-init to finish.
  */
-export async function provisionServer(instanceId: string): Promise<void> {
-  console.log(`[Hetzner] Starting provisioning for instance ${instanceId}`);
+export async function createServerForInstance(instanceId: string): Promise<void> {
+  console.log(`[Hetzner] Creating server for instance ${instanceId}`);
 
-  // Fetch agent config from the instance → agent relationship
   const instance = await db.query.agentInstances.findFirst({
     where: (t, { eq }) => eq(t.id, instanceId),
     with: { agent: true },
@@ -450,20 +450,14 @@ export async function provisionServer(instanceId: string): Promise<void> {
   const region = instance.region ?? "us-east";
   const location = resolveLocation(region);
 
-  // Move to provisioning status
-  await updateInstanceStatus(instanceId, { status: "provisioning" });
-
   try {
-    // Generate a gateway auth token for the OpenClaw HTTP API
     const gatewayToken = randomBytes(32).toString("hex");
-
-    // Generate cloud-init script
     const userData = generateCloudInit(agentConfig, instanceId, gatewayToken);
 
-    // Create the Hetzner server — include agent name for easy identification
     const slug = agent.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
     const serverName = `aura-${slug || "agent"}-${instanceId.slice(0, 8)}`;
     console.log(`[Hetzner] Creating server "${serverName}" in ${location} for agent "${agent.name}"`);
+
     const server = await createServer({
       name: serverName,
       location,
@@ -477,16 +471,17 @@ export async function provisionServer(instanceId: string): Promise<void> {
 
     const serverId = String(server.id);
     const serverIp = server.public_net.ipv4.ip;
+    console.log(`[Hetzner] Server created: ${serverId} (${serverIp})`);
 
-    console.log(`[Hetzner] Server created: ${serverId} (${serverIp}), waiting for running status...`);
-
-    // Update DB with server details immediately
+    // Save server details + move to provisioning/vm_booting
     await updateInstanceStatus(instanceId, {
+      status: "provisioning",
       serverId,
       serverIp,
+      currentStep: "vm_booting",
     });
 
-    // Store the gateway token on the agent config so the dashboard can proxy chat requests
+    // Store gateway token on agent config for chat proxying
     const existingConfig = (agent.config as Record<string, unknown>) ?? {};
     await db
       .update(agents)
@@ -495,46 +490,117 @@ export async function provisionServer(instanceId: string): Promise<void> {
         updatedAt: new Date(),
       })
       .where(eq(agents.id, agent.id));
-
-    // Wait for server to boot
-    await updateInstanceStatus(instanceId, { currentStep: "vm_booting" });
-    await waitForServerRunning(serverId);
-
-    console.log(`[Hetzner] Server ${serverId} is running. Waiting for cloud-init and gateway...`);
-
-    // Wait for cloud-init to finish and OpenClaw gateway to respond
-    // waitForGateway updates steps granularly: installing_packages → caddy_up → verifying_chat
-    await updateInstanceStatus(instanceId, { currentStep: "installing_packages" });
-    await waitForGateway(serverIp, gatewayToken, instanceId);
-
-    // Gateway is actually reachable — mark as running
-    await updateInstanceStatus(instanceId, {
-      status: "running",
-      startedAt: new Date(),
-    });
-
-    console.log(`[Hetzner] Provisioning complete for instance ${instanceId}`);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown provisioning error";
-    console.error(`[Hetzner] Provisioning failed for instance ${instanceId}:`, message);
-
-    // Clean up the Hetzner server to prevent orphaned billing
-    const failedInstance = await db.query.agentInstances.findFirst({
-      where: (t, { eq }) => eq(t.id, instanceId),
-    });
-    if (failedInstance?.serverId) {
-      try {
-        console.log(`[Hetzner] Cleaning up failed server ${failedInstance.serverId}`);
-        await deleteServer(failedInstance.serverId);
-      } catch (cleanupErr) {
-        console.error(`[Hetzner] Failed to cleanup server ${failedInstance.serverId}:`, cleanupErr);
-      }
-    }
-
+    console.error(`[Hetzner] Server creation failed for instance ${instanceId}:`, message);
     await updateInstanceStatus(instanceId, {
       status: "failed",
       error: friendlyHetznerError(message),
     });
+  }
+}
+
+/**
+ * Incrementally progress the provisioning state by one step.
+ * Designed to be called from a polling endpoint (e.g. every 1-2s).
+ * Each call does at most one quick check and returns immediately.
+ *
+ * Progression: pending → provisioning(vm_booting → installing_packages → caddy_up → verifying_chat) → running
+ */
+export async function progressProvisioning(instanceId: string): Promise<void> {
+  const instance = await db.query.agentInstances.findFirst({
+    where: (t, { eq }) => eq(t.id, instanceId),
+    with: { agent: true },
+  });
+
+  if (!instance) return;
+
+  // Only progress instances that are actively provisioning
+  if (instance.status !== "pending" && instance.status !== "provisioning") return;
+
+  // Timeout: if provisioning for >10 minutes, fail and clean up
+  const elapsed = Date.now() - new Date(instance.createdAt).getTime();
+  if (elapsed > 600_000) {
+    console.error(`[Hetzner] Instance ${instanceId} timed out after 10 minutes`);
+    if (instance.serverId) {
+      try {
+        await deleteServer(instance.serverId);
+      } catch { /* best effort */ }
+    }
+    await updateInstanceStatus(instanceId, {
+      status: "failed",
+      error: "Server setup took too long. This can happen with slow network conditions. Please retry — the next attempt usually succeeds.",
+    });
+    return;
+  }
+
+  // Step 1: pending → create server (use DB status as lock to prevent duplicate creation)
+  if (instance.status === "pending") {
+    // Atomically move to "provisioning" to prevent concurrent polls from creating multiple servers
+    const [updated] = await db
+      .update(agentInstances)
+      .set({ status: "provisioning", updatedAt: new Date() })
+      .where(and(eq(agentInstances.id, instanceId), eq(agentInstances.status, "pending")))
+      .returning();
+    if (!updated) return; // Another request already moved it past pending
+    await createServerForInstance(instanceId);
+    return;
+  }
+
+  // Step 2: vm_booting → check if Hetzner server is running
+  if (instance.currentStep === "vm_booting" && instance.serverId) {
+    try {
+      const server = await getServer(instance.serverId);
+      if (server.status === "running") {
+        console.log(`[Hetzner] Server ${instance.serverId} is running, moving to installing_packages`);
+        await updateInstanceStatus(instanceId, { currentStep: "installing_packages" });
+      }
+    } catch (err) {
+      console.log(`[Hetzner] Server status check failed: ${err instanceof Error ? err.message : err}`);
+    }
+    return;
+  }
+
+  // Step 3: installing_packages / caddy_up → probe HTTP
+  if (
+    (instance.currentStep === "installing_packages" || instance.currentStep === "caddy_up") &&
+    instance.serverIp
+  ) {
+    try {
+      const res = await fetch(`http://${instance.serverIp}:80/`, {
+        signal: AbortSignal.timeout(4_000),
+      });
+      if (res.status === 502) {
+        // Caddy is up but OpenClaw not yet
+        if (instance.currentStep !== "caddy_up") {
+          console.log(`[Hetzner] Caddy is up, waiting for OpenClaw`);
+          await updateInstanceStatus(instanceId, { currentStep: "caddy_up" });
+        }
+      } else {
+        // Gateway responding — move to verification
+        console.log(`[Hetzner] Gateway responded (${res.status}), moving to verifying_chat`);
+        await updateInstanceStatus(instanceId, { currentStep: "verifying_chat" });
+      }
+    } catch {
+      // Connection refused / timeout — cloud-init still running
+    }
+    return;
+  }
+
+  // Step 4: verifying_chat → test chat completions
+  if (instance.currentStep === "verifying_chat" && instance.serverIp && instance.agent) {
+    const agentConfig = (instance.agent.config as Record<string, unknown>) ?? {};
+    const gatewayToken = agentConfig.gatewayToken as string | undefined;
+    if (!gatewayToken) return;
+
+    const verified = await verifyChatEndpoint(instance.serverIp, gatewayToken);
+    if (verified) {
+      console.log(`[Hetzner] Chat verified! Marking instance ${instanceId} as running`);
+      await updateInstanceStatus(instanceId, {
+        status: "running",
+        startedAt: new Date(),
+      });
+    }
   }
 }
 

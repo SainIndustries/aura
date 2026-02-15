@@ -2,7 +2,7 @@ import { db } from "@/lib/db";
 import { agentInstances, agents } from "@/lib/db/schema";
 import { eq, and, desc, ne } from "drizzle-orm";
 import { simulateProvisioning, simulateTermination } from "./simulator";
-import { provisionServer, terminateServer } from "./hetzner";
+import { progressProvisioning as hetznerProgress, terminateServer } from "./hetzner";
 
 const USE_HETZNER = !!process.env.HETZNER_API_TOKEN;
 
@@ -134,19 +134,16 @@ export async function queueAgentProvisioning(agentId: string, region: string = "
 
   console.log(`[Provisioning] Queued agent ${agentId} for provisioning in region ${region}`);
   console.log(`[Provisioning] Instance ${instance.id} created with status: pending`);
-  console.log(`[Provisioning] Using ${USE_HETZNER ? "Hetzner Cloud" : "Simulator (dev)"}`);
+  console.log(`[Provisioning] Using ${USE_HETZNER ? "Hetzner Cloud (poll-driven)" : "Simulator (dev)"}`);
 
-  // Start provisioning (non-blocking)
-  if (USE_HETZNER) {
-    provisionServer(instance.id).catch((err) => {
-      console.error(`[Provisioning] Hetzner error for instance ${instance.id}:`, err);
-    });
-  } else {
-    // Dev-only simulator when no Hetzner token is configured
+  if (!USE_HETZNER) {
+    // Dev-only simulator — runs as background process (fine for local dev server)
     simulateProvisioning(instance.id).catch((err) => {
       console.error(`[Provisioning] Simulation error for instance ${instance.id}:`, err);
     });
   }
+  // For Hetzner: provisioning is driven by progressProvisioning() called from the polling endpoint.
+  // The instance starts as "pending" and the first poll will create the server.
 
   return instance as ProvisioningStatus;
 }
@@ -201,18 +198,37 @@ export async function stopAgentInstance(agentId: string): Promise<ProvisioningSt
 
   console.log(`[Provisioning] Stopping instance ${instance.id}`);
 
-  // Start termination (non-blocking)
-  if (USE_HETZNER) {
-    terminateServer(instance.id).catch((err) => {
-      console.error(`[Provisioning] Hetzner termination error for instance ${instance.id}:`, err);
-    });
-  } else {
-    simulateTermination(instance.id).catch((err) => {
-      console.error(`[Provisioning] Simulation termination error for instance ${instance.id}:`, err);
-    });
+  // Terminate synchronously (fire-and-forget doesn't work on Vercel serverless)
+  try {
+    if (USE_HETZNER) {
+      await terminateServer(instance.id);
+    } else {
+      await simulateTermination(instance.id);
+    }
+  } catch (err) {
+    console.error(`[Provisioning] Termination error for instance ${instance.id}:`, err);
   }
 
-  return updatedInstance as ProvisioningStatus;
+  // Re-fetch to return latest status after termination
+  const finalInstance = await db.query.agentInstances.findFirst({
+    where: eq(agentInstances.id, instance.id),
+  });
+
+  return (finalInstance ?? updatedInstance) as ProvisioningStatus;
+}
+
+/**
+ * Progress provisioning for the given instance by one step.
+ * Called from the polling endpoint on each UI poll (~1s).
+ * Only relevant for Hetzner — simulator handles its own progression.
+ */
+export async function progressInstanceProvisioning(instanceId: string): Promise<void> {
+  if (!USE_HETZNER) return; // Simulator handles its own progression
+  try {
+    await hetznerProgress(instanceId);
+  } catch (err) {
+    console.error(`[Provisioning] Progress error for instance ${instanceId}:`, err);
+  }
 }
 
 /**
