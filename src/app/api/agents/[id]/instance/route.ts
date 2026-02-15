@@ -10,6 +10,9 @@ import {
   progressInstanceProvisioning,
 } from "@/lib/provisioning";
 
+// Allow up to 15s for provisioning progress checks (external HTTP calls to Hetzner + gateway)
+export const maxDuration = 15;
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
