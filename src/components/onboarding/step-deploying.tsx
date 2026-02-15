@@ -58,12 +58,29 @@ function useRotatingQuote() {
   return { quote: DEPLOY_QUOTES[index], visible };
 }
 
+function useElapsedTime(running: boolean) {
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    if (!running) return;
+    setElapsed(0);
+    const interval = setInterval(() => setElapsed((e) => e + 1), 1000);
+    return () => clearInterval(interval);
+  }, [running]);
+
+  const mins = Math.floor(elapsed / 60);
+  const secs = elapsed % 60;
+  const display = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+  return { elapsed, display };
+}
+
 export function StepDeploying({ agentId }: { agentId: string }) {
   const [state, setState] = useState<DeployState>("deploying");
   const [steps, setSteps] = useState<ProvisioningStep[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [deployTriggered, setDeployTriggered] = useState(false);
   const { quote, visible } = useRotatingQuote();
+  const { display: elapsedDisplay } = useElapsedTime(state === "deploying");
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -162,6 +179,10 @@ export function StepDeploying({ agentId }: { agentId: string }) {
                   className="h-full bg-gradient-to-r from-aura-accent to-aura-mint transition-all duration-500 ease-out rounded-full"
                   style={{ width: `${progress}%` }}
                 />
+              </div>
+              <div className="flex justify-between text-xs text-aura-text-ghost">
+                <span>{elapsedDisplay} elapsed</span>
+                <span>~2-3 min total</span>
               </div>
             </div>
 

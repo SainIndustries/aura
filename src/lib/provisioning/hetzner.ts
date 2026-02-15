@@ -319,12 +319,14 @@ async function waitForServerRunning(
 }
 
 /**
- * Wait for the OpenClaw gateway to respond on the server.
+ * Wait for the OpenClaw gateway to respond on the server AND verify
+ * the chat completions endpoint actually works.
  * Cloud-init installs Node.js, OpenClaw, and Caddy — this polls until the
- * gateway is actually reachable, not just until the VM boots.
+ * gateway is fully operational, not just until the VM boots.
  */
 async function waitForGateway(
   serverIp: string,
+  gatewayToken: string,
   timeoutMs: number = 300_000 // 5 minutes — cloud-init can take a while
 ): Promise<void> {
   const start = Date.now();
@@ -341,8 +343,14 @@ async function waitForGateway(
       if (res.status === 502) {
         console.log(`[Hetzner] Gateway returned 502 (OpenClaw not ready yet)`);
       } else {
-        console.log(`[Hetzner] Gateway responded with status ${res.status}`);
-        return;
+        console.log(`[Hetzner] Gateway responded with status ${res.status}, verifying chat endpoint...`);
+        // Gateway is up — now verify chat completions actually works
+        const verified = await verifyChatEndpoint(serverIp, gatewayToken);
+        if (verified) {
+          console.log(`[Hetzner] Chat completions verified successfully`);
+          return;
+        }
+        console.log(`[Hetzner] Chat completions not ready yet, continuing to poll...`);
       }
     } catch {
       // Connection refused or timeout — cloud-init still running
@@ -351,6 +359,42 @@ async function waitForGateway(
   }
 
   throw new Error(`Gateway at ${serverIp} did not become reachable within ${timeoutMs / 1000}s`);
+}
+
+/**
+ * Send a test chat completion request to verify the endpoint works end-to-end.
+ */
+async function verifyChatEndpoint(serverIp: string, gatewayToken: string): Promise<boolean> {
+  try {
+    const res = await fetch(`http://${serverIp}:80/v1/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${gatewayToken}`,
+      },
+      body: JSON.stringify({
+        model: "openclaw",
+        messages: [{ role: "user", content: "hi" }],
+        max_tokens: 5,
+        stream: false,
+      }),
+      signal: AbortSignal.timeout(30_000), // LLM call can take a few seconds
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      console.log(`[Hetzner] Chat verification failed (${res.status}): ${text.slice(0, 200)}`);
+      return false;
+    }
+
+    const data = await res.json();
+    const content = data?.choices?.[0]?.message?.content;
+    console.log(`[Hetzner] Chat verification response: "${content?.slice(0, 50)}"`);
+    return !!content;
+  } catch (err) {
+    console.log(`[Hetzner] Chat verification error: ${err instanceof Error ? err.message : err}`);
+    return false;
+  }
 }
 
 /**
@@ -462,7 +506,7 @@ export async function provisionServer(instanceId: string): Promise<void> {
 
     // Wait for cloud-init to finish and OpenClaw gateway to respond
     await updateInstanceStatus(instanceId, { currentStep: "ansible_started" });
-    await waitForGateway(serverIp);
+    await waitForGateway(serverIp, gatewayToken);
 
     await updateInstanceStatus(instanceId, { currentStep: "ansible_complete" });
 
