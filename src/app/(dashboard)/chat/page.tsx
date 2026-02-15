@@ -15,6 +15,8 @@ import {
   Mail,
   Hash,
   Rocket,
+  MessageCircle,
+  Phone,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -560,30 +562,42 @@ export default function ChatPage() {
       {/* Input area */}
       <div className="p-4 border-t border-aura-border">
         {/* Tool connection buttons */}
-        {(googleConnected === false || slackConnected === false) && (
-          <div className="flex items-center gap-2 mb-3">
-            {googleConnected === false && (
-              <button
-                type="button"
-                onClick={() => openOAuthPopup("google")}
-                className="flex items-center gap-1.5 rounded-full border border-aura-border px-3.5 py-1.5 text-xs font-medium text-aura-text-light hover:border-aura-accent hover:text-aura-accent transition-colors"
-              >
-                <Mail className="w-3.5 h-3.5" />
-                Connect Gmail
-              </button>
-            )}
-            {slackConnected === false && (
-              <button
-                type="button"
-                onClick={() => openOAuthPopup("slack")}
-                className="flex items-center gap-1.5 rounded-full border border-aura-border px-3.5 py-1.5 text-xs font-medium text-aura-text-light hover:border-aura-accent hover:text-aura-accent transition-colors"
-              >
-                <Hash className="w-3.5 h-3.5" />
-                Connect Slack
-              </button>
-            )}
-          </div>
-        )}
+        <div className="flex items-center gap-2 mb-3 flex-wrap">
+          {googleConnected === false && (
+            <button
+              type="button"
+              onClick={() => openOAuthPopup("google")}
+              className="flex items-center gap-1.5 rounded-full border border-aura-border px-3.5 py-1.5 text-xs font-medium text-aura-text-light hover:border-aura-accent hover:text-aura-accent transition-colors"
+            >
+              <Mail className="w-3.5 h-3.5" />
+              Connect Gmail
+            </button>
+          )}
+          {slackConnected === false && (
+            <button
+              type="button"
+              onClick={() => openOAuthPopup("slack")}
+              className="flex items-center gap-1.5 rounded-full border border-aura-border px-3.5 py-1.5 text-xs font-medium text-aura-text-light hover:border-aura-accent hover:text-aura-accent transition-colors"
+            >
+              <Hash className="w-3.5 h-3.5" />
+              Connect Slack
+            </button>
+          )}
+          <NextLink
+            href="/integrations"
+            className="flex items-center gap-1.5 rounded-full border border-aura-border px-3.5 py-1.5 text-xs font-medium text-aura-text-light hover:border-aura-accent hover:text-aura-accent transition-colors"
+          >
+            <MessageCircle className="w-3.5 h-3.5" />
+            Connect Telegram
+          </NextLink>
+          <NextLink
+            href="/integrations"
+            className="flex items-center gap-1.5 rounded-full border border-aura-border px-3.5 py-1.5 text-xs font-medium text-aura-text-light hover:border-aura-accent hover:text-aura-accent transition-colors"
+          >
+            <Phone className="w-3.5 h-3.5" />
+            Connect WhatsApp
+          </NextLink>
+        </div>
         <div className="flex items-end gap-2">
           <div className="flex-1 relative">
             <textarea

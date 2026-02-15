@@ -229,9 +229,15 @@ async function streamFromOpenClaw(
       for (const call of choice.tool_calls) {
         if (call.type !== "function") continue;
         controller.enqueue(encoder.encode(sseStatus(toolStatusLabel(call.function.name))));
+        let args: Record<string, unknown> = {};
+        try {
+          args = JSON.parse(call.function.arguments || "{}");
+        } catch {
+          console.error(`[chat] Failed to parse tool arguments for ${call.function.name}:`, call.function.arguments);
+        }
         const result = await executeToolCall(
           call.function.name,
-          JSON.parse(call.function.arguments),
+          args,
           options.googleAccessToken!
         );
         allMessages.push({
@@ -357,9 +363,15 @@ async function streamFromFallbackLLM(
       for (const call of msg.tool_calls) {
         if (call.type !== "function") continue;
         controller.enqueue(encoder.encode(sseStatus(toolStatusLabel(call.function.name))));
+        let args: Record<string, unknown> = {};
+        try {
+          args = JSON.parse(call.function.arguments || "{}");
+        } catch {
+          console.error(`[chat] Failed to parse tool arguments for ${call.function.name}:`, call.function.arguments);
+        }
         const result = await executeToolCall(
           call.function.name,
-          JSON.parse(call.function.arguments),
+          args,
           googleAccessToken!
         );
         llmMessages.push({
