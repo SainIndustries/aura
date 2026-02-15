@@ -82,6 +82,7 @@ jobs:
           HETZNER_API_TOKEN: ${{ secrets.HETZNER_API_TOKEN }}
           HETZNER_SSH_KEY_ID: ${{ secrets.HETZNER_SSH_KEY_ID }}
           HETZNER_SNAPSHOT_ID: ${{ secrets.HETZNER_SNAPSHOT_ID }}
+          TAILSCALE_AUTH_KEY: ${{ secrets.TAILSCALE_AUTH_KEY }}
           TAILSCALE_OAUTH_CLIENT_ID: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
           TAILSCALE_OAUTH_CLIENT_SECRET: ${{ secrets.TAILSCALE_OAUTH_CLIENT_SECRET }}
           JOB_ID: ${{ inputs.job_id }}

@@ -86,11 +86,19 @@ export async function provisionVM(
   // 3. Determine image to use (snapshot or base)
   const { image, isSnapshot } = getProvisioningImage();
 
-  // 4. Create Tailscale ephemeral auth key
-  console.log("[ProvisionVM] Creating Tailscale auth key...");
-  const authKeyResponse = await createAuthKey();
-  const authKey = authKeyResponse.key;
-  console.log("[ProvisionVM] Tailscale auth key generated");
+  // 4. Get Tailscale auth key (pre-generated or dynamic)
+  let authKey: string;
+  const preGeneratedKey = process.env.TAILSCALE_AUTH_KEY;
+  
+  if (preGeneratedKey) {
+    console.log("[ProvisionVM] Using pre-generated Tailscale auth key");
+    authKey = preGeneratedKey;
+  } else {
+    console.log("[ProvisionVM] Creating Tailscale auth key via OAuth...");
+    const authKeyResponse = await createAuthKey();
+    authKey = authKeyResponse.key;
+    console.log("[ProvisionVM] Tailscale auth key generated");
+  }
 
   // 5. Generate appropriate cloud-init config
   console.log("[ProvisionVM] Generating cloud-init configuration...");
