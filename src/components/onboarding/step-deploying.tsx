@@ -183,7 +183,7 @@ export function StepDeploying({ agentId }: { agentId: string }) {
               </div>
               <div className="flex justify-between text-xs text-aura-text-ghost">
                 <span>{elapsedDisplay} elapsed</span>
-                <span>~3-4 min total</span>
+                <span>~60 seconds</span>
               </div>
             </div>
 
