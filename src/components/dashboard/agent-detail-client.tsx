@@ -93,9 +93,9 @@ function AgentDetailClientInner({
                   Payment successful! Your 7-day trial has started.
                 </h3>
                 <p className="text-sm text-aura-text-dim mt-1">
-                  {isDeploying 
-                    ? "Starting deployment..." 
-                    : "Deploying your agent now. This takes about 2-3 minutes."}
+                  {isDeploying
+                    ? "Starting deployment..."
+                    : "Deploying your agent now. This usually takes under 30 seconds."}
                 </p>
               </div>
               <Button

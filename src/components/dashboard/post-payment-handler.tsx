@@ -44,7 +44,7 @@ export function PostPaymentHandler({ agentId, onDeploy }: PostPaymentHandlerProp
               Payment successful! Your trial has started.
             </h3>
             <p className="text-sm text-aura-text-dim mt-1">
-              Deploying your agent now. This takes about 2-3 minutes.
+              Deploying your agent now. This usually takes under 30 seconds.
             </p>
           </div>
           <Button

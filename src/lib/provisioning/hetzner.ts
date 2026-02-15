@@ -61,7 +61,7 @@ function resolveLocation(region: string): string {
 // Hetzner server types (tier → Hetzner server type)
 // ---------------------------------------------------------------------------
 
-const DEFAULT_SERVER_TYPE = "cx22"; // 2 vCPU, 4 GB RAM, 40 GB disk (~€4.35/mo)
+const DEFAULT_SERVER_TYPE = "cpx11"; // 2 vCPU, 2 GB RAM, 40 GB disk — cheapest option, sufficient for OpenClaw
 
 // Use a snapshot if available, otherwise base Ubuntu image
 function getImage(): string {
