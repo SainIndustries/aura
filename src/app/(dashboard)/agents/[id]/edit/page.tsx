@@ -54,7 +54,7 @@ export default async function EditAgentPage({
               heartbeatEnabled: agent.heartbeatEnabled ?? false,
               heartbeatCron: agent.heartbeatCron ?? "",
               llmProvider: (agent.config as Record<string, unknown>)?.llmProvider as string ?? "openrouter",
-              llmModel: (agent.config as Record<string, unknown>)?.llmModel as string ?? "anthropic/claude-sonnet-4-5-20250929",
+              llmModel: (agent.config as Record<string, unknown>)?.llmModel as string ?? "anthropic/claude-sonnet-4.5",
               llmTemperature: (agent.config as Record<string, unknown>)?.llmTemperature as number ?? 0.7,
               llmCustomEndpoint: (agent.config as Record<string, unknown>)?.llmCustomEndpoint as string ?? "",
             }}

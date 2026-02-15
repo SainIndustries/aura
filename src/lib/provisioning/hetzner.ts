@@ -123,9 +123,9 @@ function generateCloudInit(agentConfig: AgentConfig, instanceId: string, gateway
     }
   }
 
-  // For OpenRouter, model is already in provider/model format (e.g. "anthropic/claude-sonnet-4-5-20250929")
+  // For OpenRouter, model is already in provider/model format (e.g. "anthropic/claude-sonnet-4.5")
   // For direct providers, combine provider + model
-  const model = agentConfig.llmModel ?? (isOpenRouter ? "anthropic/claude-sonnet-4-5-20250929" : "gpt-4.1-mini");
+  const model = agentConfig.llmModel ?? (isOpenRouter ? "anthropic/claude-sonnet-4.5" : "gpt-4.1-mini");
   const openclawModel = isOpenRouter ? model : `${provider}/${model}`;
 
   // Build the system prompt from personality + goal
@@ -356,9 +356,13 @@ async function waitForGateway(
       const res = await fetch(`http://${serverIp}:80/`, {
         signal: AbortSignal.timeout(4_000),
       });
-      // Any HTTP response means Caddy + OpenClaw are up
-      console.log(`[Hetzner] Gateway responded with status ${res.status}`);
-      return;
+      // 502 means Caddy is up but OpenClaw isn't running yet — keep waiting
+      if (res.status === 502) {
+        console.log(`[Hetzner] Gateway returned 502 (OpenClaw not ready yet)`);
+      } else {
+        console.log(`[Hetzner] Gateway responded with status ${res.status}`);
+        return;
+      }
     } catch {
       // Connection refused or timeout — cloud-init still running
     }

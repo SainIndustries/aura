@@ -28,7 +28,7 @@ const openai = process.env.OPENAI_API_KEY
 // Fallback LLM for when no running OpenClaw instance exists
 function getFallbackLLM(): { client: OpenAI; model: string } | null {
   if (openrouter) {
-    return { client: openrouter, model: "anthropic/claude-sonnet-4-5-20250929" };
+    return { client: openrouter, model: "anthropic/claude-sonnet-4.5" };
   }
   if (openai) {
     return { client: openai, model: "gpt-4.1-mini" };

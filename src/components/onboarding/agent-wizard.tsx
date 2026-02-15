@@ -128,7 +128,7 @@ function WizardFlow() {
       try {
         const llmModel =
           state.brainType === "managed"
-            ? "anthropic/claude-sonnet-4-5-20250929"
+            ? "anthropic/claude-sonnet-4.5"
             : "";
         const llmProvider =
           state.brainType === "managed" ? "openrouter" : "custom";

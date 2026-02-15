@@ -107,7 +107,7 @@ export function StepReview({
                 Model
               </label>
               <p className="mt-1 text-aura-text-white font-medium">
-                {data.llmModel || "anthropic/claude-sonnet-4-5-20250929"}
+                {data.llmModel || "anthropic/claude-sonnet-4.5"}
               </p>
             </div>
           </div>
