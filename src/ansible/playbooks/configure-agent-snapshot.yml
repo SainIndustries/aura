@@ -40,7 +40,8 @@
       until: >
         cloud_init_status.cloud_init_data_facts is defined and
         cloud_init_status.cloud_init_data_facts.status.v1.stage is defined and
-        cloud_init_status.cloud_init_data_facts.status.v1.stage == ''
+        (cloud_init_status.cloud_init_data_facts.status.v1.stage is none or
+         cloud_init_status.cloud_init_data_facts.status.v1.stage == '')
       retries: 30
       delay: 5
 
