@@ -17,8 +17,21 @@ import {
   Rocket,
   MessageCircle,
   Phone,
+  Plus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  integrationProviders,
+  categoryMeta,
+  type IntegrationCategory,
+} from "@/lib/integrations/providers";
 import {
   Select,
   SelectContent,
@@ -597,6 +610,53 @@ export default function ChatPage() {
             <Phone className="w-3.5 h-3.5" />
             Connect WhatsApp
           </NextLink>
+          <Dialog>
+            <DialogTrigger asChild>
+              <button
+                type="button"
+                className="flex items-center gap-1.5 rounded-full border border-dashed border-aura-border px-3.5 py-1.5 text-xs font-medium text-aura-text-dim hover:border-aura-accent hover:text-aura-accent transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Connect More
+              </button>
+            </DialogTrigger>
+            <DialogContent className="bg-aura-surface border-aura-border max-w-lg max-h-[70vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle className="text-aura-text-white">Connect an Integration</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 mt-2">
+                {(Object.keys(categoryMeta) as IntegrationCategory[]).map((cat) => {
+                  const providers = integrationProviders.filter((p) => p.category === cat);
+                  if (!providers.length) return null;
+                  return (
+                    <div key={cat}>
+                      <p className="text-xs font-medium text-aura-text-dim mb-2">
+                        {categoryMeta[cat].label}
+                      </p>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {providers.map((p) => {
+                          const Icon = p.icon;
+                          return (
+                            <NextLink
+                              key={p.id}
+                              href="/integrations"
+                              className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-aura-text-light hover:bg-aura-accent/10 hover:text-aura-accent transition-colors"
+                            >
+                              <Icon className="w-4 h-4 flex-shrink-0" />
+                              <span className="truncate">{p.name}</span>
+                              {p.comingSoon && (
+                                <span className="text-[10px] text-aura-text-ghost ml-auto">Soon</span>
+                              )}
+                            </NextLink>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
         <div className="flex items-end gap-2">
           <div className="flex-1 relative">
