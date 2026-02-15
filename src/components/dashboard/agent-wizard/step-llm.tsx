@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { UseFormReturn } from "react-hook-form";
 import { CreateAgentData } from "@/lib/validators/agent";
 import { Button } from "@/components/ui/button";
@@ -13,8 +14,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
-import { ArrowLeft, ArrowRight, Brain, Sparkles, Zap, Info } from "lucide-react";
+import { ArrowLeft, ArrowRight, Brain, Sparkles, Zap, Info, CheckCircle2, Eye, EyeOff, Loader2, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { LLM_PROVIDERS as BYOK_PROVIDERS, isByokProvider } from "@/lib/integrations/llm-providers";
 
 const LLM_PROVIDERS = [
   {
@@ -105,6 +107,44 @@ export function StepLLM({ form, onBack, onNext }: StepLLMProps) {
   const temperature = form.watch("llmTemperature") ?? 0.7;
 
   const selectedProvider = LLM_PROVIDERS.find((p) => p.id === provider);
+
+  const [apiKey, setApiKey] = useState("");
+  const [showKey, setShowKey] = useState(false);
+  const [validating, setValidating] = useState(false);
+  const [keyValidated, setKeyValidated] = useState(false);
+  const [validationError, setValidationError] = useState("");
+
+  useEffect(() => {
+    setApiKey("");
+    setShowKey(false);
+    setKeyValidated(false);
+    setValidationError("");
+  }, [provider]);
+
+  const handleValidateKey = async () => {
+    if (!apiKey.trim() || !isByokProvider(provider)) return;
+    setValidating(true);
+    setValidationError("");
+    try {
+      const res = await fetch("/api/integrations/llm-keys", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider, apiKey: apiKey.trim() }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        setValidationError(data.error || "Invalid API key");
+        setKeyValidated(false);
+      } else {
+        setKeyValidated(true);
+        setValidationError("");
+      }
+    } catch {
+      setValidationError("Failed to validate key. Please try again.");
+    } finally {
+      setValidating(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -239,15 +279,63 @@ export function StepLLM({ form, onBack, onNext }: StepLLMProps) {
           </div>
         </div>
       ) : provider !== "custom" ? (
-        <div className="flex items-start gap-3 p-4 rounded-lg bg-aura-accent/5 border border-aura-accent/20">
-          <Info className="w-5 h-5 text-aura-accent flex-shrink-0 mt-0.5" />
-          <div className="text-sm">
-            <p className="text-aura-text-light font-medium">API Key Required</p>
-            <p className="text-aura-text-dim mt-1">
-              You&apos;ll need to provide your own API key for {selectedProvider?.name}.
-              Add it in Settings → Integrations after creating your agent.
-            </p>
+        <div className="space-y-3 p-4 rounded-lg bg-aura-accent/5 border border-aura-accent/20">
+          <div className="flex items-center justify-between">
+            <Label className="text-aura-text-light font-medium">
+              API Key for {selectedProvider?.name}
+            </Label>
+            {isByokProvider(provider) && BYOK_PROVIDERS[provider]?.docsUrl && (
+              <a
+                href={BYOK_PROVIDERS[provider].docsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-aura-accent hover:text-aura-accent-bright flex items-center gap-1"
+              >
+                Get API Key <ExternalLink className="w-3 h-3" />
+              </a>
+            )}
           </div>
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <Input
+                type={showKey ? "text" : "password"}
+                placeholder="sk-..."
+                value={apiKey}
+                onChange={(e) => {
+                  setApiKey(e.target.value);
+                  setKeyValidated(false);
+                  setValidationError("");
+                }}
+                className="bg-aura-elevated border-aura-border pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowKey(!showKey)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-aura-text-ghost hover:text-aura-text-dim"
+              >
+                {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+            {keyValidated ? (
+              <div className="flex items-center gap-1.5 text-green-400 text-sm px-3">
+                <CheckCircle2 className="w-4 h-4" />
+                Connected
+              </div>
+            ) : (
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleValidateKey}
+                disabled={!apiKey.trim() || validating}
+                className="shrink-0"
+              >
+                {validating ? <Loader2 className="w-4 h-4 animate-spin" /> : "Validate"}
+              </Button>
+            )}
+          </div>
+          {validationError && (
+            <p className="text-xs text-red-400">{validationError}</p>
+          )}
         </div>
       ) : (
         <div className="flex items-start gap-3 p-4 rounded-lg bg-aura-accent/5 border border-aura-accent/20">

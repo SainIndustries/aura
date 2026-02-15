@@ -9,6 +9,7 @@ import {
   generateSkillMd,
   generateCredReceiverJs,
 } from "./vm-google-skill";
+import { LLM_PROVIDERS, isByokProvider } from "@/lib/integrations/llm-providers";
 
 // ---------------------------------------------------------------------------
 // Hetzner Cloud API client for provisioning OpenClaw agent VMs
@@ -112,6 +113,7 @@ function generateCloudInit(
   instanceId: string,
   gatewayToken: string,
   googleCreds?: GoogleCredentials | null,
+  llmApiKey?: string | null,
 ): string {
   const provider = agentConfig.llmProvider ?? "openrouter";
   const isOpenRouter = provider === "openrouter";
@@ -128,18 +130,10 @@ function generateCloudInit(
     if (process.env.OPENROUTER_API_KEY) {
       envKeys.OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
     }
-  } else {
-    // Direct provider keys (BYOK)
-    const keyMap: Record<string, string | undefined> = {
-      OPENAI_API_KEY: process.env.OPENAI_API_KEY,
-      ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
-      GOOGLE_API_KEY: process.env.GOOGLE_API_KEY,
-      GROQ_API_KEY: process.env.GROQ_API_KEY,
-      XAI_API_KEY: process.env.XAI_API_KEY,
-    };
-    for (const [k, v] of Object.entries(keyMap)) {
-      if (v) envKeys[k] = v;
-    }
+  } else if (llmApiKey && isByokProvider(provider)) {
+    // Per-user BYOK key from integrations table
+    const envVar = LLM_PROVIDERS[provider].envVar;
+    envKeys[envVar] = llmApiKey;
   }
 
   // Build OpenClaw config matching the documented schema
@@ -568,8 +562,28 @@ export async function createServerForInstance(instanceId: string): Promise<void>
       }
     }
 
+    // Look up user's LLM API key from integrations table
+    let llmApiKey: string | null = null;
+    const llmProvider = agentConfig.llmProvider;
+    if (llmProvider && isByokProvider(llmProvider)) {
+      const llmIntegration = await db.query.integrations.findFirst({
+        where: and(
+          eq(integrations.userId, agent.userId),
+          eq(integrations.provider, LLM_PROVIDERS[llmProvider].integrationKey),
+        ),
+      });
+      if (llmIntegration?.accessToken) {
+        try {
+          llmApiKey = decryptToken(llmIntegration.accessToken);
+          console.log(`[Hetzner] Found BYOK API key for provider ${llmProvider}`);
+        } catch (err) {
+          console.warn(`[Hetzner] Could not decrypt LLM API key for ${llmProvider}:`, err);
+        }
+      }
+    }
+
     const gatewayToken = randomBytes(32).toString("hex");
-    const userData = generateCloudInit(agentConfig, instanceId, gatewayToken, googleCreds);
+    const userData = generateCloudInit(agentConfig, instanceId, gatewayToken, googleCreds, llmApiKey);
 
     const slug = agent.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
     const serverName = `aura-${slug || "agent"}-${instanceId.slice(0, 8)}`;
