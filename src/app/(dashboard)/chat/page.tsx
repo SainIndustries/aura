@@ -634,7 +634,7 @@ export default function ChatPage() {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Type a message..."
-              className="w-full resize-none rounded-xl border border-aura-border bg-aura-surface pl-4 pr-11 py-3 text-sm sm:text-base text-aura-text-white placeholder:text-aura-text-ghost focus:border-aura-accent focus:outline-none focus:ring-1 focus:ring-aura-accent"
+              className="w-full resize-none rounded-xl border border-aura-border bg-aura-surface pl-4 pr-11 py-3 text-base text-aura-text-white placeholder:text-aura-text-ghost focus:border-aura-accent focus:outline-none focus:ring-1 focus:ring-aura-accent"
               rows={1}
               style={{
                 minHeight: "44px",
