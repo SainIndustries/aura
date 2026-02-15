@@ -29,10 +29,10 @@ export async function createCheckoutSession(agentId?: string) {
   }
 
   const successUrl = agentId
-    ? `${process.env.NEXT_PUBLIC_APP_URL}/agents/${agentId}?success=true`
+    ? `${process.env.NEXT_PUBLIC_APP_URL}/onboarding?agentId=${agentId}&success=true`
     : `${process.env.NEXT_PUBLIC_APP_URL}/settings?success=true`;
   const cancelUrl = agentId
-    ? `${process.env.NEXT_PUBLIC_APP_URL}/agents/${agentId}?canceled=true`
+    ? `${process.env.NEXT_PUBLIC_APP_URL}/onboarding`
     : `${process.env.NEXT_PUBLIC_APP_URL}/settings?canceled=true`;
 
   const session = await stripe.checkout.sessions.create({

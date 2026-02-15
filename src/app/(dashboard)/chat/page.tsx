@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { usePrivy } from "@privy-io/react-auth";
+import NextLink from "next/link";
 import {
   Send,
   Mic,
@@ -11,10 +12,12 @@ import {
   Loader2,
   Sparkles,
   Mail,
-  Link,
+  Hash,
+  Rocket,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useAgentStatus } from "@/components/providers/agent-status-provider";
 
 // Web Speech API types
 interface SpeechRecognitionEvent extends Event {
@@ -67,6 +70,7 @@ type Message = {
 
 export default function ChatPage() {
   const { user } = usePrivy();
+  const { hasRunningAgent } = useAgentStatus();
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "welcome",
@@ -80,10 +84,11 @@ export default function ChatPage() {
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [googleConnected, setGoogleConnected] = useState<boolean | null>(null);
-  const [googleEmail, setGoogleEmail] = useState<string | null>(null);
-  const [openclawRunning, setOpenclawRunning] = useState<boolean | null>(null);
+  const [slackConnected, setSlackConnected] = useState<boolean | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<ISpeechRecognition | null>(null);
+  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const oauthPopupRef = useRef<Window | null>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -93,23 +98,104 @@ export default function ChatPage() {
     scrollToBottom();
   }, [messages]);
 
-  // Check Google integration status
-  useEffect(() => {
-    async function checkStatus() {
-      try {
-        const res = await fetch("/api/integrations/status");
-        if (res.ok) {
-          const data = await res.json();
-          setGoogleConnected(data.google?.connected ?? false);
-          setGoogleEmail(data.google?.email ?? null);
-          setOpenclawRunning(data.openclaw?.running ?? false);
-        }
-      } catch {
-        // Silently fail — not critical
+  // Check integration status (Google + Slack)
+  const checkIntegrations = useCallback(async () => {
+    try {
+      const res = await fetch("/api/integrations/status");
+      if (res.ok) {
+        const data = await res.json();
+        const gConn = data.google?.connected ?? false;
+        const sConn = data.slack?.connected ?? false;
+        setGoogleConnected(gConn);
+        setSlackConnected(sConn);
+        return { google: gConn, slack: sConn };
       }
+    } catch {
+      // Silently fail
     }
-    checkStatus();
+    return null;
   }, []);
+
+  useEffect(() => {
+    if (hasRunningAgent) checkIntegrations();
+  }, [hasRunningAgent, checkIntegrations]);
+
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+    };
+  }, []);
+
+  const openOAuthPopup = useCallback(
+    (provider: "google" | "slack") => {
+      const url =
+        provider === "google"
+          ? "/api/integrations/google"
+          : "/api/integrations/slack";
+
+      oauthPopupRef.current = window.open(
+        url,
+        `connect-${provider}`,
+        "width=600,height=700,left=200,top=100"
+      );
+
+      // Poll for connection every 2s
+      if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+      pollTimerRef.current = setInterval(async () => {
+        const status = await checkIntegrations();
+        if (!status) return;
+
+        const connected =
+          provider === "google" ? status.google : status.slack;
+
+        if (connected) {
+          if (pollTimerRef.current) {
+            clearInterval(pollTimerRef.current);
+            pollTimerRef.current = null;
+          }
+          if (oauthPopupRef.current && !oauthPopupRef.current.closed) {
+            oauthPopupRef.current.close();
+          }
+        }
+      }, 2000);
+    },
+    [checkIntegrations]
+  );
+
+  // Gate: loading
+  if (hasRunningAgent === null) {
+    return (
+      <div className="flex items-center justify-center h-[calc(100vh-2rem)]">
+        <Loader2 className="h-8 w-8 animate-spin text-aura-accent" />
+      </div>
+    );
+  }
+
+  // Gate: no agent deployed
+  if (hasRunningAgent === false) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[calc(100vh-2rem)] max-w-md mx-auto text-center gap-6">
+        <div className="w-16 h-16 rounded-full bg-aura-accent/10 flex items-center justify-center">
+          <Rocket className="w-8 h-8 text-aura-accent" />
+        </div>
+        <div className="space-y-2">
+          <h1 className="text-2xl font-semibold text-aura-text-white">
+            Deploy an agent to start chatting
+          </h1>
+          <p className="text-aura-text-dim">
+            Create and deploy your AI agent first, then come back here to chat with Aura.
+          </p>
+        </div>
+        <Button asChild className="bg-aura-accent hover:bg-aura-accent-bright">
+          <NextLink href="/agents">
+            <Bot className="mr-2 h-4 w-4" />
+            Go to Agents
+          </NextLink>
+        </Button>
+      </div>
+    );
+  }
 
   // Initialize speech recognition
   useEffect(() => {
@@ -248,43 +334,18 @@ export default function ChatPage() {
               Gmail & Calendar
             </div>
           )}
-          {openclawRunning ? (
-            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-aura-mint/10 text-aura-mint text-xs font-medium">
-              <span className="w-2 h-2 rounded-full bg-aura-mint animate-pulse" />
-              Agent Live
-            </div>
-          ) : (
-            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-aura-mint/10 text-aura-mint text-xs font-medium">
-              <span className="w-2 h-2 rounded-full bg-aura-mint animate-pulse" />
-              Online
+          {slackConnected && (
+            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-aura-purple/10 text-aura-purple text-xs font-medium">
+              <Hash className="w-3 h-3" />
+              Slack
             </div>
           )}
+          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-aura-mint/10 text-aura-mint text-xs font-medium">
+            <span className="w-2 h-2 rounded-full bg-aura-mint animate-pulse" />
+            Agent Live
+          </div>
         </div>
       </div>
-
-      {/* Status banners */}
-      {openclawRunning === false && (
-        <a
-          href="/agents"
-          className="flex items-center gap-2 px-4 py-2.5 bg-aura-surface border-b border-aura-border text-sm text-aura-text-dim hover:text-aura-text-light transition-colors"
-        >
-          <Link className="w-4 h-4 text-aura-accent" />
-          <span>
-            <span className="text-aura-text-light font-medium">Deploy an agent</span> to unlock full Aura capabilities with your own OpenClaw instance
-          </span>
-        </a>
-      )}
-      {openclawRunning && googleConnected === false && (
-        <a
-          href="/integrations"
-          className="flex items-center gap-2 px-4 py-2.5 bg-aura-surface border-b border-aura-border text-sm text-aura-text-dim hover:text-aura-text-light transition-colors"
-        >
-          <Link className="w-4 h-4 text-aura-accent" />
-          <span>
-            <span className="text-aura-text-light font-medium">Connect Google</span> to manage emails & calendar directly from chat
-          </span>
-        </a>
-      )}
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -364,6 +425,31 @@ export default function ChatPage() {
 
       {/* Input area */}
       <div className="p-4 border-t border-aura-border">
+        {/* Tool connection buttons */}
+        {(googleConnected === false || slackConnected === false) && (
+          <div className="flex items-center gap-2 mb-3">
+            {googleConnected === false && (
+              <button
+                type="button"
+                onClick={() => openOAuthPopup("google")}
+                className="flex items-center gap-1.5 rounded-full border border-aura-border px-3.5 py-1.5 text-xs font-medium text-aura-text-light hover:border-aura-accent hover:text-aura-accent transition-colors"
+              >
+                <Mail className="w-3.5 h-3.5" />
+                Connect Gmail
+              </button>
+            )}
+            {slackConnected === false && (
+              <button
+                type="button"
+                onClick={() => openOAuthPopup("slack")}
+                className="flex items-center gap-1.5 rounded-full border border-aura-border px-3.5 py-1.5 text-xs font-medium text-aura-text-light hover:border-aura-accent hover:text-aura-accent transition-colors"
+              >
+                <Hash className="w-3.5 h-3.5" />
+                Connect Slack
+              </button>
+            )}
+          </div>
+        )}
         <div className="flex items-end gap-2">
           <div className="flex-1 relative">
             <textarea

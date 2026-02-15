@@ -1,25 +1,19 @@
 "use client";
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense } from "react";
 import { Loader2 } from "lucide-react";
+import { AgentWizard } from "@/components/onboarding/agent-wizard";
 
-// Onboarding now just redirects to agent creation
-// The flow is: Sign up → Create Agent → Payment → Deploy → Connect Tools
 export default function OnboardingPage() {
-  const router = useRouter();
-
-  useEffect(() => {
-    // Redirect to create first agent
-    router.replace("/agents/new");
-  }, [router]);
-
   return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="text-center">
-        <Loader2 className="h-8 w-8 animate-spin text-aura-accent mx-auto mb-4" />
-        <p className="text-aura-text-dim">Setting up your workspace...</p>
-      </div>
-    </div>
+    <Suspense
+      fallback={
+        <div className="fixed inset-0 z-50 bg-aura-void flex items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-aura-accent" />
+        </div>
+      }
+    >
+      <AgentWizard />
+    </Suspense>
   );
 }
