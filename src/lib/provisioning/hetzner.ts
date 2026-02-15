@@ -1,3 +1,4 @@
+import { randomBytes } from "crypto";
 import { db } from "@/lib/db";
 import { agents } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
@@ -90,7 +91,7 @@ interface AgentConfig {
   heartbeatCron?: string | null;
 }
 
-function generateCloudInit(agentConfig: AgentConfig, instanceId: string): string {
+function generateCloudInit(agentConfig: AgentConfig, instanceId: string, gatewayToken: string): string {
   // Map Aura LLM provider names to OpenClaw env var names
   const llmEnvVars: string[] = [];
   const provider = agentConfig.llmProvider ?? "openrouter";
@@ -179,6 +180,27 @@ runcmd:
     ${envFileContent}
     OPENCLAW_INSTANCE_ID=${instanceId}
     ENVEOF
+
+  # --- Write OpenClaw config (enable HTTP chat completions endpoint) ---
+  - |
+    cat > /root/.openclaw/openclaw.json << 'CFGEOF'
+    {
+      "agent": {
+        "model": "${openclawModel}",
+        "name": "${escapedAgentName}"
+      },
+      "gateway": {
+        "auth": {
+          "token": "${gatewayToken}"
+        },
+        "http": {
+          "endpoints": {
+            "chatCompletions": { "enabled": true }
+          }
+        }
+      }
+    }
+    CFGEOF
 
   # --- Install Caddy for auto-HTTPS reverse proxy ---
   - curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
@@ -360,8 +382,11 @@ export async function provisionServer(instanceId: string): Promise<void> {
   await updateInstanceStatus(instanceId, { status: "provisioning" });
 
   try {
+    // Generate a gateway auth token for the OpenClaw HTTP API
+    const gatewayToken = randomBytes(32).toString("hex");
+
     // Generate cloud-init script
-    const userData = generateCloudInit(agentConfig, instanceId);
+    const userData = generateCloudInit(agentConfig, instanceId, gatewayToken);
 
     // Create the Hetzner server
     console.log(`[Hetzner] Creating server in ${location} for agent "${agent.name}"`);
@@ -386,6 +411,16 @@ export async function provisionServer(instanceId: string): Promise<void> {
       serverId,
       serverIp,
     });
+
+    // Store the gateway token on the agent config so the dashboard can proxy chat requests
+    const existingConfig = (agent.config as Record<string, unknown>) ?? {};
+    await db
+      .update(agents)
+      .set({
+        config: { ...existingConfig, gatewayToken },
+        updatedAt: new Date(),
+      })
+      .where(eq(agents.id, agent.id));
 
     // Wait for server to boot
     await waitForServerRunning(serverId);

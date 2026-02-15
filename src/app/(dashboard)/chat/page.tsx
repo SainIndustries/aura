@@ -8,9 +8,10 @@ import {
   MicOff,
   Volume2,
   Bot,
-  User,
   Loader2,
   Sparkles,
+  Mail,
+  Link,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -78,6 +79,9 @@ export default function ChatPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [googleConnected, setGoogleConnected] = useState<boolean | null>(null);
+  const [googleEmail, setGoogleEmail] = useState<string | null>(null);
+  const [openclawRunning, setOpenclawRunning] = useState<boolean | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<ISpeechRecognition | null>(null);
 
@@ -88,6 +92,24 @@ export default function ChatPage() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Check Google integration status
+  useEffect(() => {
+    async function checkStatus() {
+      try {
+        const res = await fetch("/api/integrations/status");
+        if (res.ok) {
+          const data = await res.json();
+          setGoogleConnected(data.google?.connected ?? false);
+          setGoogleEmail(data.google?.email ?? null);
+          setOpenclawRunning(data.openclaw?.running ?? false);
+        }
+      } catch {
+        // Silently fail — not critical
+      }
+    }
+    checkStatus();
+  }, []);
 
   // Initialize speech recognition
   useEffect(() => {
@@ -135,15 +157,15 @@ export default function ChatPage() {
     if ("speechSynthesis" in window) {
       // Cancel any ongoing speech
       window.speechSynthesis.cancel();
-      
+
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.rate = 1;
       utterance.pitch = 1;
-      
+
       utterance.onstart = () => setIsSpeaking(true);
       utterance.onend = () => setIsSpeaking(false);
       utterance.onerror = () => setIsSpeaking(false);
-      
+
       window.speechSynthesis.speak(utterance);
     }
   };
@@ -220,12 +242,49 @@ export default function ChatPage() {
           <p className="text-sm text-aura-text-dim">Your AI Assistant</p>
         </div>
         <div className="ml-auto flex items-center gap-2">
-          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-aura-mint/10 text-aura-mint text-xs font-medium">
-            <span className="w-2 h-2 rounded-full bg-aura-mint animate-pulse" />
-            Online
-          </div>
+          {googleConnected && (
+            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-aura-accent/10 text-aura-accent text-xs font-medium">
+              <Mail className="w-3 h-3" />
+              Gmail & Calendar
+            </div>
+          )}
+          {openclawRunning ? (
+            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-aura-mint/10 text-aura-mint text-xs font-medium">
+              <span className="w-2 h-2 rounded-full bg-aura-mint animate-pulse" />
+              Agent Live
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-aura-mint/10 text-aura-mint text-xs font-medium">
+              <span className="w-2 h-2 rounded-full bg-aura-mint animate-pulse" />
+              Online
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Status banners */}
+      {openclawRunning === false && (
+        <a
+          href="/agents"
+          className="flex items-center gap-2 px-4 py-2.5 bg-aura-surface border-b border-aura-border text-sm text-aura-text-dim hover:text-aura-text-light transition-colors"
+        >
+          <Link className="w-4 h-4 text-aura-accent" />
+          <span>
+            <span className="text-aura-text-light font-medium">Deploy an agent</span> to unlock full Aura capabilities with your own OpenClaw instance
+          </span>
+        </a>
+      )}
+      {openclawRunning && googleConnected === false && (
+        <a
+          href="/integrations"
+          className="flex items-center gap-2 px-4 py-2.5 bg-aura-surface border-b border-aura-border text-sm text-aura-text-dim hover:text-aura-text-light transition-colors"
+        >
+          <Link className="w-4 h-4 text-aura-accent" />
+          <span>
+            <span className="text-aura-text-light font-medium">Connect Google</span> to manage emails & calendar directly from chat
+          </span>
+        </a>
+      )}
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -285,7 +344,7 @@ export default function ChatPage() {
             </div>
           </div>
         ))}
-        
+
         {isLoading && (
           <div className="flex items-start gap-3">
             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-aura-accent to-aura-purple flex items-center justify-center">
@@ -299,7 +358,7 @@ export default function ChatPage() {
             </div>
           </div>
         )}
-        
+
         <div ref={messagesEndRef} />
       </div>
 

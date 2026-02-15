@@ -2,14 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { getCurrentUser } from "@/lib/auth/current-user";
-import {
-  checkAndDeductTokens,
-  adjustTokenUsage,
-} from "@/lib/billing/token-guard";
-
-const openai = process.env.OPENAI_API_KEY
-  ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-  : null;
+import { db } from "@/lib/db";
+import { agents, agentInstances, integrations } from "@/lib/db/schema";
+import { eq, and } from "drizzle-orm";
+import { getValidAccessToken } from "@/lib/integrations/token-refresh";
+import { GOOGLE_TOOLS, executeToolCall } from "@/lib/integrations/chat-tools";
 
 // OpenRouter client — used when OPENROUTER_API_KEY is set
 const openrouter =
@@ -24,8 +21,12 @@ const openrouter =
       })
     : null;
 
-// Pick the best available LLM client
-function getLLMClient(): { client: OpenAI; model: string } | null {
+const openai = process.env.OPENAI_API_KEY
+  ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+  : null;
+
+// Fallback LLM for when no running OpenClaw instance exists
+function getFallbackLLM(): { client: OpenAI; model: string } | null {
   if (openrouter) {
     return { client: openrouter, model: "anthropic/claude-sonnet-4-5-20250929" };
   }
@@ -51,20 +52,113 @@ Personality:
 - Offer proactive suggestions
 - Format responses with markdown when helpful (bold, lists, etc.)
 
-You can talk about your capabilities and help users understand what you can do. When users ask you to perform actions (like send emails or schedule meetings), acknowledge the request and explain that the full integration would connect to their actual services.
-
 Keep responses concise but helpful. You're chatting in real-time, so don't write essays.`;
 
-// Rough token estimate: ~4 chars per token for English text
-function estimateTokens(messages: { role: string; content: string }[]): number {
-  const systemTokens = Math.ceil(SYSTEM_PROMPT.length / 4);
-  const messageTokens = messages.reduce(
-    (sum, m) => sum + Math.ceil(m.content.length / 4) + 4, // 4 overhead per message
-    0
-  );
-  // Estimate ~300 output tokens for a typical response
-  return systemTokens + messageTokens + 300;
+const GOOGLE_TOOLS_PROMPT = `
+
+You have access to the user's Gmail and Google Calendar. You can:
+- List and read emails (use list_emails, read_email)
+- Send emails (use send_email)
+- List calendar events (use list_calendar_events)
+- Create calendar events (use create_calendar_event)
+
+Use these tools proactively when the user asks about emails, scheduling, or calendar.
+When listing emails, summarize them concisely. When creating events or sending emails, confirm details with the user before executing.`;
+
+// ---------- OpenClaw instance lookup ----------
+
+interface OpenClawInstance {
+  serverIp: string;
+  gatewayToken: string;
 }
+
+/**
+ * Find the user's running OpenClaw instance (first running agent).
+ * Returns the server IP and gateway auth token for proxying.
+ */
+async function getUserOpenClawInstance(userId: string): Promise<OpenClawInstance | null> {
+  // Find agents owned by this user
+  const userAgents = await db.query.agents.findMany({
+    where: eq(agents.userId, userId),
+    with: {
+      instances: true,
+    },
+  });
+
+  for (const agent of userAgents) {
+    const runningInstance = (agent.instances ?? []).find(
+      (inst) => inst.status === "running" && inst.serverIp
+    );
+
+    if (runningInstance) {
+      const config = (agent.config as Record<string, unknown>) ?? {};
+      const gatewayToken = config.gatewayToken as string | undefined;
+
+      if (gatewayToken && runningInstance.serverIp) {
+        return {
+          serverIp: runningInstance.serverIp,
+          gatewayToken,
+        };
+      }
+    }
+  }
+
+  return null;
+}
+
+// ---------- Google token lookup (for fallback mode) ----------
+
+async function getUserGoogleToken(userId: string): Promise<string | null> {
+  const integration = await db.query.integrations.findFirst({
+    where: and(
+      eq(integrations.userId, userId),
+      eq(integrations.provider, "google")
+    ),
+  });
+
+  if (!integration) return null;
+  return getValidAccessToken(integration.id, "google");
+}
+
+// ---------- Proxy to OpenClaw Gateway ----------
+
+async function proxyToOpenClaw(
+  instance: OpenClawInstance,
+  messages: { role: string; content: string }[]
+): Promise<string> {
+  // OpenClaw exposes an OpenAI-compatible endpoint at /v1/chat/completions
+  const url = `http://${instance.serverIp}/v1/chat/completions`;
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${instance.gatewayToken}`,
+    },
+    body: JSON.stringify({
+      model: "openclaw",
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        ...messages,
+      ],
+      stream: false,
+    }),
+    signal: AbortSignal.timeout(60_000), // 60s timeout for tool-heavy requests
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`OpenClaw gateway error (${res.status}): ${text}`);
+  }
+
+  const data = await res.json();
+  return (
+    data.choices?.[0]?.message?.content ||
+    "I'm sorry, I couldn't process that request."
+  );
+}
+
+// ---------- Main handler ----------
 
 export async function POST(request: NextRequest) {
   try {
@@ -89,69 +183,105 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const llm = getLLMClient();
+    const user = await getCurrentUser();
 
-    // If no LLM is configured, use fallback responses
+    // ---------- Path 1: Proxy to user's running OpenClaw instance ----------
+    if (user) {
+      const instance = await getUserOpenClawInstance(user.id);
+
+      if (instance) {
+        try {
+          const response = await proxyToOpenClaw(instance, messages);
+          return NextResponse.json({ message: response });
+        } catch (err) {
+          console.error("[Chat] OpenClaw proxy failed, falling through to direct LLM:", err);
+          // Fall through to direct LLM call
+        }
+      }
+    }
+
+    // ---------- Path 2: Direct LLM call (fallback when no running instance) ----------
+    const llm = getFallbackLLM();
+
     if (!llm) {
       const fallbackResponse = getFallbackResponse(messages);
       return NextResponse.json({ message: fallbackResponse });
     }
 
-    // Check token balance (if user is authenticated)
-    const user = await getCurrentUser();
-    const estimatedTokens = estimateTokens(messages);
+    // Check if user has Google connected (for fallback tool calling)
+    const googleAccessToken = user ? await getUserGoogleToken(user.id) : null;
+    const hasGoogleTools = !!googleAccessToken;
 
-    if (user) {
-      const tokenCheck = await checkAndDeductTokens(user.id, estimatedTokens);
+    // Build system prompt
+    const systemPrompt = hasGoogleTools
+      ? SYSTEM_PROMPT + GOOGLE_TOOLS_PROMPT
+      : SYSTEM_PROMPT +
+        "\n\nWhen users ask you to perform actions (like send emails or schedule meetings), acknowledge the request and suggest they connect their Google account in the Integrations section to enable these features.";
 
-      if (!tokenCheck.allowed) {
-        return NextResponse.json(
-          {
-            error: "insufficient_tokens",
-            balance: tokenCheck.remainingBalance,
-            message: tokenCheck.message,
-          },
-          { status: 402 }
-        );
-      }
-    }
+    const llmMessages: OpenAI.ChatCompletionMessageParam[] = [
+      { role: "system", content: systemPrompt },
+      ...messages.map((m: { role: string; content: string }) => ({
+        role: m.role as "user" | "assistant",
+        content: m.content,
+      })),
+    ];
 
-    // Call LLM
-    const completion = await llm.client.chat.completions.create({
+    const llmOptions: OpenAI.ChatCompletionCreateParamsNonStreaming = {
       model: llm.model,
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        ...messages.map((m: { role: string; content: string }) => ({
-          role: m.role as "user" | "assistant",
-          content: m.content,
-        })),
-      ],
-      max_tokens: 500,
+      messages: llmMessages,
+      max_tokens: 1000,
       temperature: 0.7,
+      ...(hasGoogleTools ? { tools: GOOGLE_TOOLS } : {}),
       ...(openrouter && user ? { user: user.id } : {}),
-    });
+    };
+
+    // Initial LLM call
+    let completion = await llm.client.chat.completions.create(llmOptions);
+
+    // Tool call loop (max 3 iterations)
+    let iterations = 0;
+    while (
+      completion.choices[0]?.message?.tool_calls?.length &&
+      iterations < 3 &&
+      googleAccessToken
+    ) {
+      const assistantMessage = completion.choices[0].message;
+      llmMessages.push(assistantMessage);
+
+      for (const call of assistantMessage.tool_calls!) {
+        if (call.type !== "function") continue;
+        const result = await executeToolCall(
+          call.function.name,
+          JSON.parse(call.function.arguments),
+          googleAccessToken
+        );
+
+        llmMessages.push({
+          role: "tool",
+          tool_call_id: call.id,
+          content: JSON.stringify(result),
+        });
+      }
+
+      completion = await llm.client.chat.completions.create({
+        ...llmOptions,
+        messages: llmMessages,
+      });
+
+      iterations++;
+    }
 
     const response =
       completion.choices[0]?.message?.content ||
       "I'm sorry, I couldn't process that request.";
 
-    // Adjust token usage with actual count from the response
-    if (user && completion.usage) {
-      const actualTokens =
-        completion.usage.prompt_tokens + completion.usage.completion_tokens;
-      adjustTokenUsage(user.id, estimatedTokens, actualTokens).catch((err) =>
-        console.error("[Billing] Failed to adjust token usage:", err)
-      );
-    }
-
     return NextResponse.json({
       message: response,
-      ...(user ? { tokensUsed: completion.usage?.total_tokens } : {}),
+      ...(completion.usage ? { tokensUsed: completion.usage.total_tokens } : {}),
     });
   } catch (error) {
     console.error("Chat error:", error);
 
-    // If LLM fails, use fallback
     const body = await request
       .clone()
       .json()
