@@ -1,0 +1,1 @@
+ALTER TABLE "voice_settings" ADD COLUMN "llm_proxy_token" text;

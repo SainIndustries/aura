@@ -217,6 +217,8 @@ export const voiceSettings = pgTable("voice_settings", {
   agentId: uuid("agent_id").references(() => agents.id, { onDelete: "cascade" }),
   elevenlabsVoiceId: text("elevenlabs_voice_id"),
   elevenlabsModelId: text("elevenlabs_model_id"),
+  elevenlabsConvaiAgentId: text("elevenlabs_convai_agent_id"),
+  llmProxyToken: text("llm_proxy_token"),
   twilioPhoneNumber: text("twilio_phone_number"),
   callHandlingEnabled: boolean("call_handling_enabled").default(false),
   voicemailEnabled: boolean("voicemail_enabled").default(true),
