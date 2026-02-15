@@ -473,7 +473,7 @@ export async function POST(request: NextRequest) {
           try {
             await streamFromOpenClaw(controller, instance, messages, {
               tools: hasGoogleTools ? GOOGLE_TOOLS : undefined,
-              googleAccessToken: googleAccessToken ?? undefined,
+              googleAccessToken: hasGoogleTools ? googleAccessToken! : undefined,
             });
             controller.enqueue(encoder.encode(sseDone()));
             controller.close();
@@ -500,7 +500,7 @@ export async function POST(request: NextRequest) {
           messages,
           agentName,
           agentPersonality,
-          googleAccessToken,
+          hasGoogleTools ? googleAccessToken : null,
           user?.id
         );
 
