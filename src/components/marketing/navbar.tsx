@@ -98,7 +98,7 @@ const navItems: NavItem[] = [
     },
   },
   { href: "#how", label: "How It Works" },
-  { href: "/sign-in", label: "Start Free Trial", highlight: true },
+  { href: "/onboarding", label: "Start Free Trial", highlight: true },
 ];
 
 function ThemeToggle() {
@@ -300,7 +300,7 @@ function MobileMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () => void 
               </Link>
             ) : (
               <Link
-                href="/sign-in"
+                href="/onboarding"
                 onClick={onClose}
                 className="block w-full text-center rounded-lg bg-aura-accent px-6 py-3 font-semibold text-white hover:bg-aura-accent-bright transition-colors"
               >
@@ -358,7 +358,7 @@ export function Navbar() {
                 </Link>
               ) : (
                 <Link
-                  href="/sign-in"
+                  href="/onboarding"
                   className="inline-flex rounded-lg bg-aura-accent px-[22px] py-[9px] text-[13.5px] font-semibold text-white transition-all hover:-translate-y-px hover:bg-aura-accent-bright hover:shadow-[0_4px_24px_rgba(79,143,255,0.25)]"
                 >
                   Get Started

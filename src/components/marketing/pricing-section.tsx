@@ -43,7 +43,7 @@ export function PricingSection() {
                 <p className="text-aura-text-dim mt-2">after 7-day free trial</p>
               </div>
               <Link
-                href="/sign-in"
+                href="/onboarding"
                 className="group inline-flex items-center justify-center gap-2 rounded-xl bg-aura-accent px-8 py-4 text-lg font-semibold text-white transition-all duration-250 hover:-translate-y-0.5 hover:bg-aura-accent-bright hover:shadow-[0_8px_36px_rgba(79,143,255,0.25)]"
               >
                 Start Free Trial
