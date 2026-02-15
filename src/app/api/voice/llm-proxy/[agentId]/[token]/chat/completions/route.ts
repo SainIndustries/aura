@@ -5,7 +5,19 @@ import { agents, voiceSettings } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { getFallbackLLM } from "@/lib/llm-client";
 
-// ---------- OpenClaw instance lookup (reused from /api/chat) ----------
+/**
+ * ElevenLabs Conversational AI custom LLM endpoint.
+ *
+ * ElevenLabs treats the custom_llm.url as a base URL and appends
+ * /chat/completions to it.  We encode agentId and token as path segments
+ * so the final URL that ElevenLabs calls is:
+ *   {APP_URL}/api/voice/llm-proxy/{agentId}/{token}/chat/completions
+ *
+ * This handler implements the OpenAI-compatible chat completions format
+ * that ElevenLabs expects.
+ */
+
+// ---------- OpenClaw instance lookup ----------
 
 interface OpenClawInstance {
   serverIp: string;
@@ -56,10 +68,11 @@ Do NOT use markdown formatting, bullet points, or special characters. Speak natu
 
 // ---------- POST handler ----------
 
-export async function POST(request: NextRequest) {
-  const url = new URL(request.url);
-  const agentId = url.searchParams.get("agentId");
-  const token = url.searchParams.get("token");
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ agentId: string; token: string }> },
+) {
+  const { agentId, token } = await params;
 
   if (!agentId || !token) {
     return Response.json(
@@ -107,14 +120,15 @@ export async function POST(request: NextRequest) {
   const agentName = instance?.agentName ?? agent?.name ?? "Assistant";
   const agentPersonality = instance?.agentPersonality ?? agent?.personality ?? null;
 
-  console.log(`[LLM Proxy] agentId=${agentId}, hasInstance=${!!instance}, stream=${shouldStream}`);
+  const lastRole = messages[messages.length - 1]?.role ?? "none";
+  console.log(`[LLM Proxy] Request: agentId=${agentId}, instance=${instance ? instance.serverIp : "none"}, stream=${shouldStream}, messages=${messages.length}, lastRole=${lastRole}`);
 
   if (!shouldStream) {
-    // Non-streaming response
     return handleNonStreaming(instance, agentName, agentPersonality, messages);
   }
 
   // Streaming response — passthrough OpenAI SSE format
+  const startTime = Date.now();
   const stream = new ReadableStream({
     async start(controller) {
       const encoder = new TextEncoder();
@@ -124,6 +138,7 @@ export async function POST(request: NextRequest) {
             await proxyToOpenClaw(controller, encoder, instance, agentName, agentPersonality, messages);
             controller.enqueue(encoder.encode("data: [DONE]\n\n"));
             controller.close();
+            console.log(`[LLM Proxy] OpenClaw stream complete (${Date.now() - startTime}ms)`);
             return;
           } catch (err) {
             console.error("[LLM Proxy] OpenClaw proxy failed, falling back:", err);
@@ -131,11 +146,14 @@ export async function POST(request: NextRequest) {
         }
 
         // Fallback to direct LLM
+        const llm = getFallbackLLM();
+        console.log(`[LLM Proxy] Using fallback LLM (${llm ? llm.model : "none configured"})`);
         await proxyToFallbackLLM(controller, encoder, agentName, agentPersonality, messages);
         controller.enqueue(encoder.encode("data: [DONE]\n\n"));
         controller.close();
+        console.log(`[LLM Proxy] Fallback stream complete (${Date.now() - startTime}ms)`);
       } catch (error) {
-        console.error("[LLM Proxy] Stream error:", error);
+        console.error(`[LLM Proxy] Stream error after ${Date.now() - startTime}ms:`, error);
         try {
           controller.enqueue(encoder.encode("data: [DONE]\n\n"));
           controller.close();
@@ -168,6 +186,8 @@ async function proxyToOpenClaw(
   const systemPrompt = buildSystemPrompt(agentName, agentPersonality);
   const allMessages = [{ role: "system", content: systemPrompt }, ...messages];
 
+  console.log(`[LLM Proxy] Proxying to OpenClaw at ${instance.serverIp}, ${allMessages.length} messages`);
+
   const res = await fetch(`http://${instance.serverIp}/v1/chat/completions`, {
     method: "POST",
     headers: {
@@ -189,7 +209,9 @@ async function proxyToOpenClaw(
 
   if (!res.body) throw new Error("OpenClaw returned no body");
 
-  // Passthrough — OpenClaw already outputs OpenAI SSE format
+  // Passthrough — OpenClaw already outputs OpenAI SSE format.
+  // Filter out OpenClaw's own [DONE] to avoid sending it twice
+  // (our caller sends its own [DONE] after this function returns).
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
@@ -203,7 +225,6 @@ async function proxyToOpenClaw(
     buffer = lines.pop() || "";
 
     for (const line of lines) {
-      // Filter out OpenClaw's [DONE] — our caller sends its own
       if (line.startsWith("data: ") && line.trim() !== "data: [DONE]") {
         controller.enqueue(encoder.encode(line + "\n\n"));
       }
@@ -222,7 +243,6 @@ async function proxyToFallbackLLM(
 ): Promise<void> {
   const llm = getFallbackLLM();
   if (!llm) {
-    // No LLM configured — send a single content chunk + finish
     const chunk = makeOpenAIChunk("I'm sorry, I'm having trouble connecting right now. Please try again later.");
     controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`));
     const finishChunk = makeFinishChunk();

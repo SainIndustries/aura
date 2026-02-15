@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef } from "react";
-import { useConversation } from "@elevenlabs/react";
+import { useConversation, type DisconnectionDetails } from "@elevenlabs/react";
 
 interface UseVoiceChatOptions {
   agentId: string | null;
@@ -37,16 +37,34 @@ export function useVoiceChat({
         onAssistantMessage(message);
       }
     },
-    onError: (message) => {
+    onError: (message, context) => {
+      console.error("[Voice] Error:", message, context);
       setError(message);
       onError(message);
       connectingRef.current = false;
     },
-    onConnect: () => {
+    onConnect: ({ conversationId }) => {
+      console.log("[Voice] Connected, conversationId:", conversationId);
       connectingRef.current = false;
     },
-    onDisconnect: () => {
+    onDisconnect: (details: DisconnectionDetails) => {
       connectingRef.current = false;
+      if (details.reason === "error") {
+        console.error("[Voice] Disconnected due to error:", details.message, "closeCode:", details.closeCode, "closeReason:", details.closeReason);
+        const errorMsg = details.message || "Voice session disconnected unexpectedly";
+        setError(errorMsg);
+        onError(errorMsg);
+      } else if (details.reason === "agent") {
+        console.log("[Voice] Session ended by agent", details.closeCode ? `(code: ${details.closeCode})` : "");
+      } else {
+        console.log("[Voice] Session ended by user");
+      }
+    },
+    onStatusChange: ({ status }) => {
+      console.log("[Voice] Status:", status);
+    },
+    onModeChange: ({ mode }) => {
+      console.log("[Voice] Mode:", mode);
     },
   });
 

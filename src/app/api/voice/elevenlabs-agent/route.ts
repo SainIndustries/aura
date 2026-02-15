@@ -76,7 +76,9 @@ export async function POST(request: Request) {
         { status: 500 },
       );
     }
-    const llmProxyUrl = `${appUrl}/api/voice/llm-proxy?agentId=${agentId}&token=${llmProxyToken}`;
+    // ElevenLabs appends /chat/completions to this base URL, so we use path
+    // segments instead of query params (query params would get mangled).
+    const llmProxyUrl = `${appUrl}/api/voice/llm-proxy/${agentId}/${llmProxyToken}`;
 
     // Create ElevenLabs secret for the proxy token
     const secretRes = await fetch(`${ELEVENLABS_API}/convai/secrets`, {
@@ -97,13 +99,12 @@ export async function POST(request: Request) {
       // Non-fatal — the token is embedded in the URL query param as well
     }
 
-    // Build the system prompt from agent personality
-    const systemPrompt = agent.personality
-      || `You are ${agent.name}, a helpful AI assistant.`;
-
     const voiceId = existingVoice?.elevenlabsVoiceId || undefined;
 
-    // Create ElevenLabs Conversational AI agent with custom LLM
+    // Create ElevenLabs Conversational AI agent with custom LLM.
+    // NOTE: Do NOT set `prompt` here — the LLM proxy already prepends its own
+    // system prompt via buildSystemPrompt(). Setting it in both places causes
+    // the LLM to receive duplicate system instructions.
     const createRes = await fetch(`${ELEVENLABS_API}/convai/agents/create`, {
       method: "POST",
       headers: {
@@ -116,7 +117,6 @@ export async function POST(request: Request) {
           agent: {
             prompt: {
               llm: "custom-llm",
-              prompt: systemPrompt,
               custom_llm: {
                 url: llmProxyUrl,
                 model_id: "openclaw",
