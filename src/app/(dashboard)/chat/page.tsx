@@ -18,6 +18,8 @@ import {
   MessageCircle,
   Rocket,
   Plus,
+  Phone,
+  PhoneOff,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -41,6 +43,8 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { useAgentStatus } from "@/components/providers/agent-status-provider";
+import { useVoiceChat } from "@/hooks/use-voice-chat";
+import { VoiceModePanel } from "@/components/chat/voice-mode-panel";
 
 // Web Speech API types
 interface SpeechRecognitionEvent extends Event {
@@ -94,7 +98,7 @@ type Message = {
 export default function ChatPage() {
   const { user } = usePrivy();
   const searchParams = useSearchParams();
-  const { hasRunningAgent, agentName, agents, selectedAgentId, setSelectedAgentId, refresh } = useAgentStatus();
+  const { hasRunningAgent, agentName, agents, selectedAgentId, setSelectedAgentId, elevenlabsConnected, refresh } = useAgentStatus();
   const [statusChecked, setStatusChecked] = useState(false);
 
   // Re-check agent status on mount (provider may have stale data from before provisioning)
@@ -143,6 +147,10 @@ export default function ChatPage() {
     if (prevId && prevId !== selectedAgentId) {
       saveStoredMessages(prevId, messages);
     }
+    // End voice session when switching agents
+    if (prevId && prevId !== selectedAgentId && voiceActive) {
+      voiceChat.endVoice();
+    }
     // Load messages for the new agent
     if (selectedAgentId && selectedAgentId !== prevId) {
       setMessages(loadStoredMessages(selectedAgentId));
@@ -179,6 +187,25 @@ export default function ChatPage() {
   const [toolStatus, setToolStatus] = useState<string | null>(null);
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+
+  const voiceChat = useVoiceChat({
+    agentId: selectedAgentId,
+    onUserMessage: (content) => {
+      setMessages((prev) => [
+        ...prev,
+        { id: `voice-u-${Date.now()}`, role: "user", content, timestamp: new Date() },
+      ]);
+    },
+    onAssistantMessage: (content) => {
+      setMessages((prev) => [
+        ...prev,
+        { id: `voice-a-${Date.now()}`, role: "assistant", content, timestamp: new Date() },
+      ]);
+    },
+    onError: () => {},
+  });
+  const voiceActive = voiceChat.isConnected || voiceChat.isConnecting;
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<ISpeechRecognition | null>(null);
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -513,6 +540,40 @@ export default function ChatPage() {
           <p className="text-sm text-aura-text-dim">Your AI Agent</p>
         </div>
         <div className="ml-auto flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+          {/* Voice toggle */}
+          <button
+            type="button"
+            onClick={() => {
+              if (voiceActive) {
+                voiceChat.endVoice();
+              } else if (elevenlabsConnected) {
+                voiceChat.startVoice();
+              } else {
+                window.location.href = "/integrations";
+              }
+            }}
+            title={
+              !elevenlabsConnected
+                ? "Connect ElevenLabs to enable voice"
+                : voiceActive
+                  ? "End voice chat"
+                  : "Start voice chat"
+            }
+            className={cn(
+              "flex items-center justify-center w-9 h-9 rounded-lg transition-colors",
+              voiceActive
+                ? "bg-red-500/15 text-red-400 hover:bg-red-500/25"
+                : elevenlabsConnected
+                  ? "text-aura-text-dim hover:text-aura-accent hover:bg-aura-accent/10"
+                  : "text-aura-text-dim hover:text-aura-accent hover:bg-aura-accent/10",
+            )}
+          >
+            {voiceActive ? (
+              <PhoneOff className="w-4 h-4" />
+            ) : (
+              <Phone className="w-4 h-4" />
+            )}
+          </button>
           {agentGoogleEnabled && (
             <div className="flex items-center gap-1.5 px-2 sm:px-3 py-1 rounded-full bg-aura-accent/10 text-aura-accent text-xs font-medium">
               <Mail className="w-3 h-3 flex-shrink-0" />
@@ -581,7 +642,7 @@ export default function ChatPage() {
                     minute: "2-digit",
                   })}
                 </span>
-                {message.role === "assistant" && (
+                {message.role === "assistant" && !voiceActive && (
                   <button
                     onClick={() => speakMessage(message.content)}
                     className="hover:text-aura-accent transition-colors"
@@ -614,131 +675,143 @@ export default function ChatPage() {
 
       {/* Input area */}
       <div className="p-3 sm:p-4 border-t border-aura-border pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:pb-[calc(1rem+env(safe-area-inset-bottom))]">
-        {/* Tool connection buttons */}
-        <div className="flex items-center gap-2 mb-2 sm:mb-3 flex-nowrap overflow-x-auto scrollbar-none">
-          {!agentGoogleEnabled && (
-            <button
-              type="button"
-              onClick={connectGoogleForAgent}
-              className="flex items-center gap-1.5 rounded-full border border-aura-border px-3.5 py-1.5 text-xs font-medium text-aura-text-light hover:border-aura-accent hover:text-aura-accent transition-colors whitespace-nowrap flex-shrink-0"
-            >
-              <Mail className="w-3.5 h-3.5" />
-              Connect Gmail
-            </button>
-          )}
-          {!agentSlackEnabled && (
-            <button
-              type="button"
-              onClick={() => openOAuthPopup("slack")}
-              className="flex items-center gap-1.5 rounded-full border border-aura-border px-3.5 py-1.5 text-xs font-medium text-aura-text-light hover:border-aura-accent hover:text-aura-accent transition-colors whitespace-nowrap flex-shrink-0"
-            >
-              <Hash className="w-3.5 h-3.5" />
-              Connect Slack
-            </button>
-          )}
-          <button
-            type="button"
-            className="flex items-center gap-1.5 rounded-full border border-aura-border px-3.5 py-1.5 text-xs font-medium text-aura-text-light hover:border-aura-accent hover:text-aura-accent transition-colors whitespace-nowrap flex-shrink-0"
-          >
-            <MessageCircle className="w-3.5 h-3.5" />
-            Connect Telegram
-          </button>
-          <Dialog>
-            <DialogTrigger asChild>
+        {voiceActive ? (
+          <VoiceModePanel
+            isConnecting={voiceChat.isConnecting}
+            isConnected={voiceChat.isConnected}
+            isSpeaking={voiceChat.isSpeaking}
+            error={voiceChat.error}
+            onEnd={voiceChat.endVoice}
+          />
+        ) : (
+          <>
+            {/* Tool connection buttons */}
+            <div className="flex items-center gap-2 mb-2 sm:mb-3 flex-nowrap overflow-x-auto scrollbar-none">
+              {!agentGoogleEnabled && (
+                <button
+                  type="button"
+                  onClick={connectGoogleForAgent}
+                  className="flex items-center gap-1.5 rounded-full border border-aura-border px-3.5 py-1.5 text-xs font-medium text-aura-text-light hover:border-aura-accent hover:text-aura-accent transition-colors whitespace-nowrap flex-shrink-0"
+                >
+                  <Mail className="w-3.5 h-3.5" />
+                  Connect Gmail
+                </button>
+              )}
+              {!agentSlackEnabled && (
+                <button
+                  type="button"
+                  onClick={() => openOAuthPopup("slack")}
+                  className="flex items-center gap-1.5 rounded-full border border-aura-border px-3.5 py-1.5 text-xs font-medium text-aura-text-light hover:border-aura-accent hover:text-aura-accent transition-colors whitespace-nowrap flex-shrink-0"
+                >
+                  <Hash className="w-3.5 h-3.5" />
+                  Connect Slack
+                </button>
+              )}
               <button
                 type="button"
-                className="flex items-center gap-1.5 rounded-full border border-dashed border-aura-border px-3.5 py-1.5 text-xs font-medium text-aura-text-dim hover:border-aura-accent hover:text-aura-accent transition-colors whitespace-nowrap flex-shrink-0"
+                className="flex items-center gap-1.5 rounded-full border border-aura-border px-3.5 py-1.5 text-xs font-medium text-aura-text-light hover:border-aura-accent hover:text-aura-accent transition-colors whitespace-nowrap flex-shrink-0"
               >
-                <Plus className="w-3.5 h-3.5" />
-                Connect More
+                <MessageCircle className="w-3.5 h-3.5" />
+                Connect Telegram
               </button>
-            </DialogTrigger>
-            <DialogContent className="bg-aura-surface border-aura-border max-w-lg max-h-[70vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle className="text-aura-text-white">Connect an Integration</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4 mt-2">
-                {(Object.keys(categoryMeta) as IntegrationCategory[]).map((cat) => {
-                  const providers = integrationProviders.filter((p) => p.category === cat);
-                  if (!providers.length) return null;
-                  return (
-                    <div key={cat}>
-                      <p className="text-xs font-medium text-aura-text-dim mb-2">
-                        {categoryMeta[cat].label}
-                      </p>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                        {providers.map((p) => {
-                          const Icon = p.icon;
-                          return (
-                            <NextLink
-                              key={p.id}
-                              href="/integrations"
-                              className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-aura-text-light hover:bg-aura-accent/10 hover:text-aura-accent transition-colors"
-                            >
-                              <Icon className="w-4 h-4 flex-shrink-0" />
-                              <span className="truncate">{p.name}</span>
-                              {p.comingSoon && (
-                                <span className="text-[10px] text-aura-text-ghost ml-auto">Soon</span>
-                              )}
-                            </NextLink>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
+              <Dialog>
+                <DialogTrigger asChild>
+                  <button
+                    type="button"
+                    className="flex items-center gap-1.5 rounded-full border border-dashed border-aura-border px-3.5 py-1.5 text-xs font-medium text-aura-text-dim hover:border-aura-accent hover:text-aura-accent transition-colors whitespace-nowrap flex-shrink-0"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Connect More
+                  </button>
+                </DialogTrigger>
+                <DialogContent className="bg-aura-surface border-aura-border max-w-lg max-h-[70vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle className="text-aura-text-white">Connect an Integration</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4 mt-2">
+                    {(Object.keys(categoryMeta) as IntegrationCategory[]).map((cat) => {
+                      const providers = integrationProviders.filter((p) => p.category === cat);
+                      if (!providers.length) return null;
+                      return (
+                        <div key={cat}>
+                          <p className="text-xs font-medium text-aura-text-dim mb-2">
+                            {categoryMeta[cat].label}
+                          </p>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                            {providers.map((p) => {
+                              const Icon = p.icon;
+                              return (
+                                <NextLink
+                                  key={p.id}
+                                  href="/integrations"
+                                  className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-aura-text-light hover:bg-aura-accent/10 hover:text-aura-accent transition-colors"
+                                >
+                                  <Icon className="w-4 h-4 flex-shrink-0" />
+                                  <span className="truncate">{p.name}</span>
+                                  {p.comingSoon && (
+                                    <span className="text-[10px] text-aura-text-ghost ml-auto">Soon</span>
+                                  )}
+                                </NextLink>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="flex-1 relative">
+                <textarea
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Type a message..."
+                  className="w-full resize-none rounded-xl border border-aura-border bg-aura-surface pl-4 pr-11 py-3 text-base text-aura-text-white placeholder:text-aura-text-ghost focus:border-aura-accent focus:outline-none focus:ring-1 focus:ring-aura-accent"
+                  rows={1}
+                  style={{
+                    minHeight: "44px",
+                    maxHeight: "200px",
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={toggleListening}
+                  className={cn(
+                    "absolute right-2 top-1/2 -translate-y-1/2 flex items-center justify-center h-8 w-8 rounded-lg transition-colors",
+                    isListening
+                      ? "text-red-500 bg-red-500/10"
+                      : "text-aura-text-dim hover:text-aura-text-light"
+                  )}
+                >
+                  {isListening ? (
+                    <MicOff className="w-4 h-4" />
+                  ) : (
+                    <Mic className="w-4 h-4" />
+                  )}
+                </button>
               </div>
-            </DialogContent>
-          </Dialog>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="flex-1 relative">
-            <textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Type a message..."
-              className="w-full resize-none rounded-xl border border-aura-border bg-aura-surface pl-4 pr-11 py-3 text-base text-aura-text-white placeholder:text-aura-text-ghost focus:border-aura-accent focus:outline-none focus:ring-1 focus:ring-aura-accent"
-              rows={1}
-              style={{
-                minHeight: "44px",
-                maxHeight: "200px",
-              }}
-            />
-            <button
-              type="button"
-              onClick={toggleListening}
-              className={cn(
-                "absolute right-2 top-1/2 -translate-y-1/2 flex items-center justify-center h-8 w-8 rounded-lg transition-colors",
-                isListening
-                  ? "text-red-500 bg-red-500/10"
-                  : "text-aura-text-dim hover:text-aura-text-light"
-              )}
-            >
+              <Button
+                onClick={sendMessage}
+                disabled={!input.trim() || isLoading}
+                className="h-[44px] w-[44px] rounded-xl bg-aura-accent hover:bg-aura-accent-bright flex-shrink-0"
+              >
+                <Send className="w-5 h-5" />
+              </Button>
+            </div>
+            <p className="hidden sm:block text-xs text-aura-text-ghost mt-2 text-center">
               {isListening ? (
-                <MicOff className="w-4 h-4" />
+                <span className="text-red-400">Listening... Click mic to stop</span>
+              ) : isSpeaking ? (
+                <span className="text-aura-accent">Speaking...</span>
               ) : (
-                <Mic className="w-4 h-4" />
+                "Press Enter to send \u00B7 Click mic for voice input"
               )}
-            </button>
-          </div>
-          <Button
-            onClick={sendMessage}
-            disabled={!input.trim() || isLoading}
-            className="h-[44px] w-[44px] rounded-xl bg-aura-accent hover:bg-aura-accent-bright flex-shrink-0"
-          >
-            <Send className="w-5 h-5" />
-          </Button>
-        </div>
-        <p className="hidden sm:block text-xs text-aura-text-ghost mt-2 text-center">
-          {isListening ? (
-            <span className="text-red-400">🎤 Listening... Click mic to stop</span>
-          ) : isSpeaking ? (
-            <span className="text-aura-accent">🔊 Speaking...</span>
-          ) : (
-            "Press Enter to send • Click mic for voice input"
-          )}
-        </p>
+            </p>
+          </>
+        )}
       </div>
     </div>
   );

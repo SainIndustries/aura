@@ -19,6 +19,14 @@ export async function GET() {
       ),
     });
 
+    // Check ElevenLabs integration
+    const elevenlabsIntegration = await db.query.integrations.findFirst({
+      where: and(
+        eq(integrations.userId, user.id),
+        eq(integrations.provider, "elevenlabs")
+      ),
+    });
+
     // Check if user has a running OpenClaw instance
     const userAgents = await db.query.agents.findMany({
       where: eq(agents.userId, user.id),
@@ -52,6 +60,9 @@ export async function GET() {
       google: {
         connected: !!googleIntegration,
         email: (googleIntegration?.metadata as { email?: string })?.email,
+      },
+      elevenlabs: {
+        connected: !!elevenlabsIntegration,
       },
       openclaw: {
         running: !!firstRunning,

@@ -21,6 +21,7 @@ interface AgentStatusContextType {
   selectedAgentId: string | null;
   setSelectedAgentId: (id: string) => void;
   googleAuthorized: boolean;
+  elevenlabsConnected: boolean;
   refresh: () => Promise<void>;
 }
 
@@ -31,6 +32,7 @@ export function AgentStatusProvider({ children }: { children: React.ReactNode })
   const [agents, setAgents] = useState<AgentInfo[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [googleAuthorized, setGoogleAuthorized] = useState(false);
+  const [elevenlabsConnected, setElevenlabsConnected] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -39,6 +41,7 @@ export function AgentStatusProvider({ children }: { children: React.ReactNode })
         const data = await res.json();
         setHasRunningAgent(data.openclaw?.running ?? false);
         setGoogleAuthorized(data.google?.connected ?? false);
+        setElevenlabsConnected(data.elevenlabs?.connected ?? false);
 
         const agentsList: AgentInfo[] = (data.agents ?? []).map((a: Record<string, unknown>) => ({
           id: a.id as string,
@@ -70,8 +73,8 @@ export function AgentStatusProvider({ children }: { children: React.ReactNode })
   }, [agents, selectedAgentId]);
 
   const value = useMemo(
-    () => ({ hasRunningAgent, agentName, agents, selectedAgentId, setSelectedAgentId, googleAuthorized, refresh }),
-    [hasRunningAgent, agentName, agents, selectedAgentId, googleAuthorized, refresh]
+    () => ({ hasRunningAgent, agentName, agents, selectedAgentId, setSelectedAgentId, googleAuthorized, elevenlabsConnected, refresh }),
+    [hasRunningAgent, agentName, agents, selectedAgentId, googleAuthorized, elevenlabsConnected, refresh]
   );
 
   return (
@@ -91,6 +94,7 @@ export function useAgentStatus() {
       selectedAgentId: null,
       setSelectedAgentId: () => {},
       googleAuthorized: false,
+      elevenlabsConnected: false,
       refresh: async () => {},
     };
   }
