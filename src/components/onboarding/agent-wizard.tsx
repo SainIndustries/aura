@@ -10,6 +10,7 @@ import { StepPersonality, type PersonalityId } from "./step-personality";
 import { StepBrain, type BrainType } from "./step-brain";
 import { StepDeploying } from "./step-deploying";
 import { createAgent } from "@/app/(dashboard)/agents/actions";
+import type { LlmProviderId } from "@/lib/integrations/llm-providers";
 
 const TOTAL_STEPS = 4;
 
@@ -19,6 +20,9 @@ type WizardState = {
   writingStyle: WritingStyleId | null;
   personality: PersonalityId | null;
   brainType: BrainType;
+  byokProvider: LlmProviderId | null;
+  byokModel: string | null;
+  byokKeyValidated: boolean;
 };
 
 type WizardAction =
@@ -26,6 +30,9 @@ type WizardAction =
   | { type: "SET_WRITING_STYLE"; payload: WritingStyleId }
   | { type: "SET_PERSONALITY"; payload: PersonalityId }
   | { type: "SET_BRAIN_TYPE"; payload: BrainType }
+  | { type: "SET_BYOK_PROVIDER"; payload: LlmProviderId }
+  | { type: "SET_BYOK_MODEL"; payload: string }
+  | { type: "SET_BYOK_KEY_VALIDATED"; payload: boolean }
   | { type: "NEXT" }
   | { type: "BACK" };
 
@@ -39,6 +46,12 @@ function reducer(state: WizardState, action: WizardAction): WizardState {
       return { ...state, personality: action.payload };
     case "SET_BRAIN_TYPE":
       return { ...state, brainType: action.payload };
+    case "SET_BYOK_PROVIDER":
+      return { ...state, byokProvider: action.payload, byokModel: null, byokKeyValidated: false };
+    case "SET_BYOK_MODEL":
+      return { ...state, byokModel: action.payload };
+    case "SET_BYOK_KEY_VALIDATED":
+      return { ...state, byokKeyValidated: action.payload };
     case "NEXT":
       return { ...state, step: Math.min(state.step + 1, TOTAL_STEPS - 1) };
     case "BACK":
@@ -89,7 +102,10 @@ function canContinue(state: WizardState): boolean {
     case 2:
       return state.personality !== null;
     case 3:
-      return true; // pre-selected default
+      if (state.brainType === "byob") {
+        return !!(state.byokProvider && state.byokModel && state.byokKeyValidated);
+      }
+      return true; // pre-selected default for managed
     default:
       return false;
   }
@@ -115,6 +131,9 @@ function WizardFlow() {
     writingStyle: null,
     personality: null,
     brainType: "managed",
+    byokProvider: null,
+    byokModel: null,
+    byokKeyValidated: false,
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -129,9 +148,11 @@ function WizardFlow() {
         const llmModel =
           state.brainType === "managed"
             ? "anthropic/claude-sonnet-4.5"
-            : "";
+            : state.byokModel || "";
         const llmProvider =
-          state.brainType === "managed" ? "openrouter" : "custom";
+          state.brainType === "managed"
+            ? "openrouter"
+            : state.byokProvider || "custom";
 
         await createAgent({
           name: state.name.trim(),
@@ -224,6 +245,18 @@ function WizardFlow() {
               value={state.brainType}
               onChange={(v) =>
                 dispatch({ type: "SET_BRAIN_TYPE", payload: v })
+              }
+              byokProvider={state.byokProvider}
+              onByokProviderChange={(v) =>
+                dispatch({ type: "SET_BYOK_PROVIDER", payload: v })
+              }
+              byokModel={state.byokModel}
+              onByokModelChange={(v) =>
+                dispatch({ type: "SET_BYOK_MODEL", payload: v })
+              }
+              byokKeyValidated={state.byokKeyValidated}
+              onByokKeyValidated={(v) =>
+                dispatch({ type: "SET_BYOK_KEY_VALIDATED", payload: v })
               }
             />
           )}
