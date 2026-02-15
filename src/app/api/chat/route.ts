@@ -146,14 +146,25 @@ async function proxyToOpenClaw(
     signal: AbortSignal.timeout(60_000), // 60s timeout for tool-heavy requests
   });
 
+  const text = await res.text();
+
   if (!res.ok) {
-    const text = await res.text();
     throw new Error(`OpenClaw gateway error (${res.status}): ${text}`);
   }
 
-  const data = await res.json();
+  if (!text) {
+    throw new Error("OpenClaw gateway returned empty response");
+  }
+
+  let data: Record<string, unknown>;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error(`OpenClaw gateway returned invalid JSON: ${text.slice(0, 200)}`);
+  }
+
   return (
-    data.choices?.[0]?.message?.content ||
+    (data as { choices?: { message?: { content?: string } }[] }).choices?.[0]?.message?.content ||
     "I'm sorry, I couldn't process that request."
   );
 }

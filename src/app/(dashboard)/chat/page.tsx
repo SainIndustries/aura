@@ -288,7 +288,13 @@ export default function ChatPage() {
         }),
       });
 
-      const data = await response.json();
+      const text = await response.text();
+      let data: { message?: string };
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch {
+        data = {};
+      }
 
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
