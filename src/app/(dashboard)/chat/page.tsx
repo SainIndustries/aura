@@ -15,8 +15,6 @@ import {
   Mail,
   Hash,
   Rocket,
-  MessageCircle,
-  Phone,
   Plus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -219,7 +217,7 @@ export default function ChatPage() {
   // Gate: loading (initial fetch or re-check in progress)
   if (hasRunningAgent === null || !statusChecked) {
     return (
-      <div className="flex items-center justify-center h-[calc(100vh-2rem)]">
+      <div className="flex items-center justify-center h-[calc(100dvh-2rem)]">
         <Loader2 className="h-8 w-8 animate-spin text-aura-accent" />
       </div>
     );
@@ -228,7 +226,7 @@ export default function ChatPage() {
   // Gate: no agents at all
   if (agents.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-[calc(100vh-2rem)] max-w-md mx-auto text-center gap-6">
+      <div className="flex flex-col items-center justify-center h-[calc(100dvh-2rem)] max-w-md mx-auto text-center gap-6">
         <div className="w-16 h-16 rounded-full bg-aura-accent/10 flex items-center justify-center">
           <Rocket className="w-8 h-8 text-aura-accent" />
         </div>
@@ -427,7 +425,7 @@ export default function ChatPage() {
   const initials = email.slice(0, 2).toUpperCase();
 
   return (
-    <div className="flex flex-col h-[calc(100vh-2rem)] max-w-4xl mx-auto">
+    <div className="flex flex-col h-[calc(100dvh-2rem)] max-w-4xl mx-auto">
       {/* Header */}
       <div className="flex items-center gap-3 sm:gap-4 p-3 sm:p-4 border-b border-aura-border">
         <div className="w-10 h-10 rounded-full bg-gradient-to-br from-aura-accent to-aura-purple flex items-center justify-center">
@@ -581,20 +579,6 @@ export default function ChatPage() {
               Connect Slack
             </button>
           )}
-          <NextLink
-            href="/integrations"
-            className="flex items-center gap-1.5 rounded-full border border-aura-border px-3.5 py-1.5 text-xs font-medium text-aura-text-light hover:border-aura-accent hover:text-aura-accent transition-colors whitespace-nowrap flex-shrink-0"
-          >
-            <MessageCircle className="w-3.5 h-3.5" />
-            Connect Telegram
-          </NextLink>
-          <NextLink
-            href="/integrations"
-            className="flex items-center gap-1.5 rounded-full border border-aura-border px-3.5 py-1.5 text-xs font-medium text-aura-text-light hover:border-aura-accent hover:text-aura-accent transition-colors whitespace-nowrap flex-shrink-0"
-          >
-            <Phone className="w-3.5 h-3.5" />
-            Connect WhatsApp
-          </NextLink>
           <Dialog>
             <DialogTrigger asChild>
               <button
@@ -683,7 +667,7 @@ export default function ChatPage() {
             <Send className="w-5 h-5" />
           </Button>
         </div>
-        <p className="text-xs text-aura-text-ghost mt-2 text-center">
+        <p className="hidden sm:block text-xs text-aura-text-ghost mt-2 text-center">
           {isListening ? (
             <span className="text-red-400">🎤 Listening... Click mic to stop</span>
           ) : isSpeaking ? (
