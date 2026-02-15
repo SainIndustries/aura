@@ -6,9 +6,7 @@ import { eq } from "drizzle-orm";
 import type Stripe from "stripe";
 import { grantTokens } from "@/lib/billing/token-guard";
 import { MONTHLY_TOKEN_ALLOCATION } from "@/lib/billing/token-packages";
-import { enqueueProvisioningJob, getJobByStripeEventId } from "@/lib/provisioning/queue";
-import { triggerProvisioningWorkflow } from "@/lib/provisioning/github-actions";
-import { destroyAgent, stopAgent } from "@/lib/provisioning/lifecycle";
+import { stopAgentInstance } from "@/lib/provisioning";
 
 export async function POST(request: Request) {
   const body = await request.text();
@@ -88,42 +86,8 @@ export async function POST(request: Request) {
           }
         }
 
-        // Queue provisioning job (idempotent)
-        // NOTE: This code is currently dormant. The current business model uses
-        // subscription-gated provisioning (user subscribes in Settings, then can
-        // deploy unlimited agents via Deploy button). This agentId metadata flow
-        // is reserved for future per-agent billing if the business model changes.
-        const agentId = session.metadata?.agentId;
-        const provUserId = session.metadata?.userId;
-        const region = session.metadata?.region || "us-east";
-
-        if (agentId && provUserId) {
-          // Idempotency check: has this Stripe event already been processed?
-          const existingJob = await getJobByStripeEventId(event.id);
-          if (existingJob) {
-            console.log(`[Stripe Webhook] Event ${event.id} already processed, skipping`);
-            break;
-          }
-
-          try {
-            const job = await enqueueProvisioningJob({
-              agentId,
-              userId: provUserId,
-              stripeEventId: event.id,
-              region,
-            });
-
-            console.log(`[Stripe Webhook] Provisioning job ${job.id} queued for agent ${agentId}`);
-
-            try {
-              await triggerProvisioningWorkflow(job);
-            } catch (triggerError) {
-              console.error(`[Stripe Webhook] Failed to trigger workflow for job ${job.id}:`, triggerError);
-            }
-          } catch (queueError) {
-            console.error(`[Stripe Webhook] Failed to queue provisioning:`, queueError);
-          }
-        }
+        // NOTE: Provisioning is handled by the onboarding UI after Stripe redirect.
+        // The webhook only handles subscription/billing state.
 
         break;
       }
@@ -171,13 +135,13 @@ export async function POST(request: Request) {
 
           if (runningInstance) {
             try {
-              await destroyAgent(agent.id);
+              await stopAgentInstance(agent.id);
               console.log(
-                `[Stripe Webhook] Destroyed agent ${agent.id} due to subscription cancellation`
+                `[Stripe Webhook] Stopped agent ${agent.id} due to subscription cancellation`
               );
             } catch (error) {
               console.error(
-                `[Stripe Webhook] Failed to destroy agent ${agent.id}:`,
+                `[Stripe Webhook] Failed to stop agent ${agent.id}:`,
                 error
               );
             }
@@ -265,7 +229,7 @@ export async function POST(request: Request) {
 
           if (runningInstance) {
             try {
-              await stopAgent(agent.id);
+              await stopAgentInstance(agent.id);
               console.log(
                 `[Stripe Webhook] Suspended agent ${agent.id} due to payment failure`
               );
