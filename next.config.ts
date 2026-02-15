@@ -2,7 +2,14 @@ import type { NextConfig } from "next";
 import { withSentryConfig } from "@sentry/nextjs";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  async rewrites() {
+    return [
+      {
+        source: "/privacy",
+        destination: "/privacy.html",
+      },
+    ];
+  },
 };
 
 export default withSentryConfig(nextConfig, {
