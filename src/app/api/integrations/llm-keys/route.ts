@@ -8,6 +8,7 @@ import {
   LLM_PROVIDERS,
   isByokProvider,
   type LlmProviderId,
+  type AuthMethodId,
 } from "@/lib/integrations/llm-providers";
 
 // GET /api/integrations/llm-keys?provider=openai - Check connection status
@@ -46,6 +47,7 @@ export async function GET(request: NextRequest) {
       connected: true,
       provider,
       connectedAt: integration.connectedAt,
+      authMethod: (integration.metadata as Record<string, unknown>)?.authMethod ?? "api-key",
     });
   } catch (error) {
     console.error("Error checking LLM key connection:", error);
@@ -65,7 +67,9 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { provider, apiKey } = body;
+    const { provider, apiKey, authMethod } = body;
+
+    const resolvedAuthMethod: AuthMethodId = authMethod === "setup-token" ? "setup-token" : "api-key";
 
     if (!provider || !isByokProvider(provider)) {
       return NextResponse.json(
@@ -83,25 +87,27 @@ export async function POST(request: NextRequest) {
 
     const providerDef = LLM_PROVIDERS[provider];
 
-    // Validate the API key by making a test request
-    const { url, headers } = providerDef.buildValidationRequest(apiKey);
-    try {
-      const validationResponse = await fetch(url, {
-        headers,
-        signal: AbortSignal.timeout(10_000),
-      });
+    // Validate the API key by making a test request (only for api-key auth)
+    if (resolvedAuthMethod === "api-key") {
+      const { url, headers } = providerDef.buildValidationRequest(apiKey);
+      try {
+        const validationResponse = await fetch(url, {
+          headers,
+          signal: AbortSignal.timeout(10_000),
+        });
 
-      if (!validationResponse.ok) {
+        if (!validationResponse.ok) {
+          return NextResponse.json(
+            { error: "Invalid API key. Please check and try again." },
+            { status: 400 }
+          );
+        }
+      } catch {
         return NextResponse.json(
           { error: "Invalid API key. Please check and try again." },
           { status: 400 }
         );
       }
-    } catch {
-      return NextResponse.json(
-        { error: "Invalid API key. Please check and try again." },
-        { status: 400 }
-      );
     }
 
     // Encrypt the API key
@@ -121,6 +127,7 @@ export async function POST(request: NextRequest) {
         .update(integrations)
         .set({
           accessToken: encryptedKey,
+          metadata: { authMethod: resolvedAuthMethod },
           updatedAt: new Date(),
         })
         .where(eq(integrations.id, existing.id));
@@ -135,6 +142,7 @@ export async function POST(request: NextRequest) {
         userId: user.id,
         provider: providerDef.integrationKey,
         accessToken: encryptedKey,
+        metadata: { authMethod: resolvedAuthMethod },
         scopes: ["llm"],
         connectedAt: new Date(),
       })

@@ -114,6 +114,7 @@ function generateCloudInit(
   gatewayToken: string,
   googleCreds?: GoogleCredentials | null,
   llmApiKey?: string | null,
+  llmAuthMethod?: string | null,
 ): string {
   const provider = agentConfig.llmProvider ?? "openrouter";
   const isOpenRouter = provider === "openrouter";
@@ -131,9 +132,13 @@ function generateCloudInit(
       envKeys.OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
     }
   } else if (llmApiKey && isByokProvider(provider)) {
-    // Per-user BYOK key from integrations table
-    const envVar = LLM_PROVIDERS[provider].envVar;
-    envKeys[envVar] = llmApiKey;
+    if (llmAuthMethod === "setup-token") {
+      // setup-token: don't add to envKeys — handled via runcmd below
+    } else {
+      // Per-user BYOK API key from integrations table
+      const envVar = LLM_PROVIDERS[provider].envVar;
+      envKeys[envVar] = llmApiKey;
+    }
   }
 
   // Build OpenClaw config matching the documented schema
@@ -189,6 +194,17 @@ function generateCloudInit(
     permissions: "0600"
     content: |
 ${indent(credsJson)}
+`;
+  }
+
+  let setupTokenFile = "";
+  if (llmAuthMethod === "setup-token" && llmApiKey) {
+    setupTokenFile = `
+  - path: /tmp/llm-setup-token
+    owner: root:root
+    permissions: "0600"
+    content: |
+      ${llmApiKey}
 `;
   }
 
@@ -260,7 +276,7 @@ ${indent(credReceiverJs)}
 
       [Install]
       WantedBy=multi-user.target
-${googleCredsFile}
+${googleCredsFile}${setupTokenFile}
 runcmd:
   # --- Add ALL repos first, then one apt-get update + install ---
   - curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
@@ -277,7 +293,9 @@ runcmd:
   - cp /etc/caddy/Caddyfile /etc/caddy/Caddyfile.dist
   - printf ':443 {\\n  handle /internal/google-credentials {\\n    reverse_proxy localhost:18790\\n    rewrite * /credentials/google\\n  }\\n  handle {\\n    reverse_proxy localhost:18789\\n  }\\n  tls internal\\n}\\n:80 {\\n  handle /internal/google-credentials {\\n    reverse_proxy localhost:18790\\n    rewrite * /credentials/google\\n  }\\n  handle {\\n    reverse_proxy localhost:18789\\n  }\\n}\\n' > /etc/caddy/Caddyfile
 
-  # --- Start services (openclaw config written by write_files) ---
+${llmAuthMethod === "setup-token" ? `  # --- Register setup-token with OpenClaw ---
+  - cat /tmp/llm-setup-token | openclaw models auth paste-token --provider anthropic && rm -f /tmp/llm-setup-token
+` : ""}  # --- Start services (openclaw config written by write_files) ---
   - systemctl daemon-reload
   - systemctl enable openclaw-gateway
   - systemctl enable cred-receiver
@@ -564,6 +582,7 @@ export async function createServerForInstance(instanceId: string): Promise<void>
 
     // Look up user's LLM API key from integrations table
     let llmApiKey: string | null = null;
+    let llmAuthMethod: string | null = null;
     const llmProvider = agentConfig.llmProvider;
     if (llmProvider && isByokProvider(llmProvider)) {
       const llmIntegration = await db.query.integrations.findFirst({
@@ -575,7 +594,8 @@ export async function createServerForInstance(instanceId: string): Promise<void>
       if (llmIntegration?.accessToken) {
         try {
           llmApiKey = decryptToken(llmIntegration.accessToken);
-          console.log(`[Hetzner] Found BYOK API key for provider ${llmProvider}`);
+          llmAuthMethod = (llmIntegration.metadata as Record<string, unknown>)?.authMethod as string ?? null;
+          console.log(`[Hetzner] Found BYOK ${llmAuthMethod ?? "api-key"} for provider ${llmProvider}`);
         } catch (err) {
           console.warn(`[Hetzner] Could not decrypt LLM API key for ${llmProvider}:`, err);
         }
@@ -583,7 +603,7 @@ export async function createServerForInstance(instanceId: string): Promise<void>
     }
 
     const gatewayToken = randomBytes(32).toString("hex");
-    const userData = generateCloudInit(agentConfig, instanceId, gatewayToken, googleCreds, llmApiKey);
+    const userData = generateCloudInit(agentConfig, instanceId, gatewayToken, googleCreds, llmApiKey, llmAuthMethod);
 
     const slug = agent.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
     const serverName = `aura-${slug || "agent"}-${instanceId.slice(0, 8)}`;

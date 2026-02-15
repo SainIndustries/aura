@@ -16,7 +16,7 @@ import {
 import { Slider } from "@/components/ui/slider";
 import { ArrowLeft, ArrowRight, Brain, Sparkles, Zap, Info, CheckCircle2, Eye, EyeOff, Loader2, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { LLM_PROVIDERS as BYOK_PROVIDERS, isByokProvider } from "@/lib/integrations/llm-providers";
+import { LLM_PROVIDERS as BYOK_PROVIDERS, isByokProvider, type AuthMethodId } from "@/lib/integrations/llm-providers";
 
 const LLM_PROVIDERS = [
   {
@@ -113,13 +113,18 @@ export function StepLLM({ form, onBack, onNext }: StepLLMProps) {
   const [validating, setValidating] = useState(false);
   const [keyValidated, setKeyValidated] = useState(false);
   const [validationError, setValidationError] = useState("");
+  const [authMethod, setAuthMethod] = useState<AuthMethodId>("api-key");
 
   useEffect(() => {
     setApiKey("");
     setShowKey(false);
     setKeyValidated(false);
     setValidationError("");
+    setAuthMethod("api-key");
   }, [provider]);
+
+  const byokProviderDef = isByokProvider(provider) ? BYOK_PROVIDERS[provider] : null;
+  const activeAuthMethod = byokProviderDef?.authMethods.find((m) => m.id === authMethod) ?? byokProviderDef?.authMethods[0] ?? null;
 
   const handleValidateKey = async () => {
     if (!apiKey.trim() || !isByokProvider(provider)) return;
@@ -129,7 +134,7 @@ export function StepLLM({ form, onBack, onNext }: StepLLMProps) {
       const res = await fetch("/api/integrations/llm-keys", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider, apiKey: apiKey.trim() }),
+        body: JSON.stringify({ provider, apiKey: apiKey.trim(), authMethod }),
       });
       if (!res.ok) {
         const data = await res.json();
@@ -282,24 +287,48 @@ export function StepLLM({ form, onBack, onNext }: StepLLMProps) {
         <div className="space-y-3 p-4 rounded-lg bg-aura-accent/5 border border-aura-accent/20">
           <div className="flex items-center justify-between">
             <Label className="text-aura-text-light font-medium">
-              API Key for {selectedProvider?.name}
+              {activeAuthMethod?.label ?? "API Key"} for {selectedProvider?.name}
             </Label>
-            {isByokProvider(provider) && BYOK_PROVIDERS[provider]?.docsUrl && (
+            {isByokProvider(provider) && (
               <a
-                href={BYOK_PROVIDERS[provider].docsUrl}
+                href={activeAuthMethod?.docsUrl ?? BYOK_PROVIDERS[provider as keyof typeof BYOK_PROVIDERS]?.docsUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-xs text-aura-accent hover:text-aura-accent-bright flex items-center gap-1"
               >
-                Get API Key <ExternalLink className="w-3 h-3" />
+                {activeAuthMethod?.validate === false ? "Get Setup Token" : "Get API Key"} <ExternalLink className="w-3 h-3" />
               </a>
             )}
           </div>
+          {byokProviderDef && byokProviderDef.authMethods.length > 1 && (
+            <div className="flex rounded-lg border border-aura-border overflow-hidden">
+              {byokProviderDef.authMethods.map((method) => (
+                <button
+                  key={method.id}
+                  type="button"
+                  onClick={() => {
+                    setAuthMethod(method.id);
+                    setApiKey("");
+                    setKeyValidated(false);
+                    setValidationError("");
+                  }}
+                  className={cn(
+                    "flex-1 px-3 py-2 text-sm font-medium transition-all",
+                    authMethod === method.id
+                      ? "bg-aura-accent/20 text-aura-accent"
+                      : "bg-aura-surface text-aura-text-dim hover:text-aura-text-light"
+                  )}
+                >
+                  {method.label}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="flex gap-2">
             <div className="relative flex-1">
               <Input
                 type={showKey ? "text" : "password"}
-                placeholder="sk-..."
+                placeholder={activeAuthMethod?.placeholder ?? "sk-..."}
                 value={apiKey}
                 onChange={(e) => {
                   setApiKey(e.target.value);
@@ -329,7 +358,7 @@ export function StepLLM({ form, onBack, onNext }: StepLLMProps) {
                 disabled={!apiKey.trim() || validating}
                 className="shrink-0"
               >
-                {validating ? <Loader2 className="w-4 h-4 animate-spin" /> : "Validate"}
+                {validating ? <Loader2 className="w-4 h-4 animate-spin" /> : activeAuthMethod?.validate === false ? "Save Token" : "Validate"}
               </Button>
             )}
           </div>
