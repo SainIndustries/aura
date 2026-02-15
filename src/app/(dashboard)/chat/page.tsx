@@ -185,6 +185,26 @@ export default function ChatPage() {
     });
   }, [agentName]);
 
+  // Check for pending integration notification from integrations page
+  useEffect(() => {
+    if (!selectedAgentId) return;
+    const pendingProvider = sessionStorage.getItem('aura_pending_integration_notification');
+    if (!pendingProvider) return;
+    sessionStorage.removeItem('aura_pending_integration_notification');
+
+    const provider = getProviderById(pendingProvider);
+    const content = getCapabilitiesMessage(pendingProvider, provider?.name);
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `integration-${pendingProvider}-${Date.now()}`,
+        role: "assistant" as const,
+        content,
+        timestamp: new Date(),
+      },
+    ]);
+  }, [selectedAgentId]);
+
   // Inject capabilities message when a new integration is connected
   useEffect(() => {
     if (!newlyConnectedIntegration) return;
@@ -243,6 +263,7 @@ export default function ChatPage() {
   const selectedAgent = agents.find((a) => a.id === selectedAgentId);
   const agentGoogleEnabled = selectedAgent?.integrations.google ?? false;
   const agentSlackEnabled = selectedAgent?.integrations.slack ?? false;
+  const agentElevenlabsEnabled = selectedAgent?.integrations.elevenlabs ?? false;
 
   // Cleanup polling on unmount
   useEffect(() => {
@@ -271,6 +292,29 @@ export default function ChatPage() {
       }
     }, 1000);
   }, [selectedAgentId, refresh]);
+
+  const connectElevenLabsForAgent = useCallback(async () => {
+    if (!selectedAgentId) return;
+
+    if (elevenlabsConnected) {
+      // User already has ElevenLabs connected at user-level — just enable on this agent
+      try {
+        const res = await fetch("/api/integrations/elevenlabs", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ agentId: selectedAgentId }),
+        });
+        if (res.ok) {
+          await refresh();
+        }
+      } catch {
+        // Silently fail
+      }
+    } else {
+      // No user-level connection — redirect to integrations page
+      window.location.href = "/integrations";
+    }
+  }, [selectedAgentId, elevenlabsConnected, refresh]);
 
   const openOAuthPopup = useCallback(
     (provider: "slack") => {
@@ -566,14 +610,14 @@ export default function ChatPage() {
             onClick={() => {
               if (voiceActive) {
                 voiceChat.endVoice();
-              } else if (elevenlabsConnected) {
+              } else if (agentElevenlabsEnabled) {
                 voiceChat.startVoice();
               } else {
-                window.location.href = "/integrations";
+                connectElevenLabsForAgent();
               }
             }}
             title={
-              !elevenlabsConnected
+              !agentElevenlabsEnabled
                 ? "Connect ElevenLabs to enable voice"
                 : voiceActive
                   ? "End voice chat"
@@ -583,7 +627,7 @@ export default function ChatPage() {
               "flex items-center justify-center w-9 h-9 rounded-lg transition-colors",
               voiceActive
                 ? "bg-red-500/15 text-red-400 hover:bg-red-500/25"
-                : elevenlabsConnected
+                : agentElevenlabsEnabled
                   ? "text-aura-text-dim hover:text-aura-accent hover:bg-aura-accent/10"
                   : "text-aura-text-dim hover:text-aura-accent hover:bg-aura-accent/10",
             )}
@@ -604,6 +648,12 @@ export default function ChatPage() {
             <div className="flex items-center gap-1.5 px-2 sm:px-3 py-1 rounded-full bg-aura-purple/10 text-aura-purple text-xs font-medium">
               <Hash className="w-3 h-3 flex-shrink-0" />
               <span className="hidden sm:inline">Slack</span>
+            </div>
+          )}
+          {agentElevenlabsEnabled && (
+            <div className="flex items-center gap-1.5 px-2 sm:px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 text-xs font-medium">
+              <Phone className="w-3 h-3 flex-shrink-0" />
+              <span className="hidden sm:inline">Voice</span>
             </div>
           )}
           {agents.find((a) => a.id === selectedAgentId)?.running && (
@@ -725,6 +775,16 @@ export default function ChatPage() {
                 >
                   <Hash className="w-3.5 h-3.5" />
                   Connect Slack
+                </button>
+              )}
+              {!agentElevenlabsEnabled && (
+                <button
+                  type="button"
+                  onClick={connectElevenLabsForAgent}
+                  className="flex items-center gap-1.5 rounded-full border border-aura-border px-3.5 py-1.5 text-xs font-medium text-aura-text-light hover:border-aura-accent hover:text-aura-accent transition-colors whitespace-nowrap flex-shrink-0"
+                >
+                  <Phone className="w-3.5 h-3.5" />
+                  Connect Voice
                 </button>
               )}
               <button

@@ -24,6 +24,7 @@ export async function createAgent(formData: unknown) {
     heartbeatEnabled: parsed.heartbeatEnabled,
     heartbeatCron: parsed.heartbeatCron,
     status: "draft",
+    integrations: {},
     config: {
       llmProvider: parsed.llmProvider,
       llmModel: parsed.llmModel,

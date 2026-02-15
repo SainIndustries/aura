@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { integrations } from "@/lib/db/schema";
+import { agents, integrations } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { encryptToken, decryptToken } from "@/lib/integrations/encryption";
@@ -68,7 +68,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { apiKey } = body;
+    const { apiKey, agentId } = body;
 
     if (!apiKey || typeof apiKey !== "string") {
       return NextResponse.json(
@@ -122,6 +122,23 @@ export async function POST(request: Request) {
         })
         .where(eq(integrations.id, existing.id));
 
+      // Enable per-agent if agentId provided
+      if (agentId) {
+        const agent = await db.query.agents.findFirst({
+          where: and(eq(agents.id, agentId), eq(agents.userId, user.id)),
+        });
+        if (agent) {
+          const currentIntegrations = (agent.integrations as Record<string, unknown>) ?? {};
+          await db
+            .update(agents)
+            .set({
+              integrations: { ...currentIntegrations, elevenlabs: true },
+              updatedAt: new Date(),
+            })
+            .where(eq(agents.id, agentId));
+        }
+      }
+
       return NextResponse.json({ success: true, updated: true });
     }
 
@@ -138,6 +155,23 @@ export async function POST(request: Request) {
       })
       .returning();
 
+    // Enable per-agent if agentId provided
+    if (agentId) {
+      const agent = await db.query.agents.findFirst({
+        where: and(eq(agents.id, agentId), eq(agents.userId, user.id)),
+      });
+      if (agent) {
+        const currentIntegrations = (agent.integrations as Record<string, unknown>) ?? {};
+        await db
+          .update(agents)
+          .set({
+            integrations: { ...currentIntegrations, elevenlabs: true },
+            updatedAt: new Date(),
+          })
+          .where(eq(agents.id, agentId));
+      }
+    }
+
     return NextResponse.json(
       { success: true, integration: { id: newIntegration.id } },
       { status: 201 }
@@ -146,6 +180,71 @@ export async function POST(request: Request) {
     console.error("Error saving ElevenLabs API key:", error);
     return NextResponse.json(
       { error: "Failed to save API key" },
+      { status: 500 }
+    );
+  }
+}
+
+// PATCH /api/integrations/elevenlabs - Enable ElevenLabs on a specific agent
+export async function PATCH(request: Request) {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const body = await request.json();
+    const { agentId } = body;
+
+    if (!agentId || typeof agentId !== "string") {
+      return NextResponse.json(
+        { error: "agentId is required" },
+        { status: 400 }
+      );
+    }
+
+    // Verify user has a user-level ElevenLabs connection
+    const integration = await db.query.integrations.findFirst({
+      where: and(
+        eq(integrations.userId, user.id),
+        eq(integrations.provider, PROVIDER)
+      ),
+    });
+
+    if (!integration) {
+      return NextResponse.json(
+        { error: "ElevenLabs not connected. Please connect your API key first." },
+        { status: 400 }
+      );
+    }
+
+    // Verify agent belongs to user
+    const agent = await db.query.agents.findFirst({
+      where: and(eq(agents.id, agentId), eq(agents.userId, user.id)),
+    });
+
+    if (!agent) {
+      return NextResponse.json(
+        { error: "Agent not found" },
+        { status: 404 }
+      );
+    }
+
+    // Enable ElevenLabs on this agent
+    const currentIntegrations = (agent.integrations as Record<string, unknown>) ?? {};
+    await db
+      .update(agents)
+      .set({
+        integrations: { ...currentIntegrations, elevenlabs: true },
+        updatedAt: new Date(),
+      })
+      .where(eq(agents.id, agentId));
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("Error enabling ElevenLabs on agent:", error);
+    return NextResponse.json(
+      { error: "Failed to enable ElevenLabs on agent" },
       { status: 500 }
     );
   }

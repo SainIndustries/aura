@@ -123,6 +123,7 @@ export function IntegrationsGrid({ connectionMap }: IntegrationsGridProps) {
     if (success) {
       const providerName = PROVIDER_NAMES[success] || success;
       toast.success(`${providerName} connected successfully!`);
+      sessionStorage.setItem('aura_pending_integration_notification', success);
       // Clean up URL
       router.replace("/integrations");
     }
@@ -178,6 +179,7 @@ export function IntegrationsGrid({ connectionMap }: IntegrationsGridProps) {
         }
 
         toast.success(`${PROVIDER_NAMES[providerId] || providerId} connected successfully!`);
+        sessionStorage.setItem('aura_pending_integration_notification', providerId);
         startTransition(() => {
           router.refresh();
         });
@@ -194,6 +196,7 @@ export function IntegrationsGrid({ connectionMap }: IntegrationsGridProps) {
     try {
       await connectIntegration(providerId);
       toast.success("Integration connected successfully");
+      sessionStorage.setItem('aura_pending_integration_notification', providerId);
       startTransition(() => {
         router.refresh();
       });

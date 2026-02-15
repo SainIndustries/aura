@@ -57,6 +57,7 @@ export async function GET() {
           integrations: {
             google: !!agentIntegrations.google && !!googleIntegration,
             slack: !!agentIntegrations.slack,
+            elevenlabs: !!agentIntegrations.elevenlabs && !!elevenlabsIntegration,
           },
         };
       });

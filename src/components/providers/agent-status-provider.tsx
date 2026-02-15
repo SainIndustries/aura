@@ -5,6 +5,7 @@ import { createContext, useContext, useEffect, useState, useCallback, useMemo, u
 interface AgentIntegrations {
   google: boolean;
   slack: boolean;
+  elevenlabs: boolean;
 }
 
 interface AgentInfo {
@@ -69,7 +70,7 @@ export function AgentStatusProvider({ children }: { children: React.ReactNode })
           id: a.id as string,
           name: a.name as string,
           running: a.running as boolean,
-          integrations: (a.integrations as AgentIntegrations) ?? { google: false, slack: false },
+          integrations: (a.integrations as AgentIntegrations) ?? { google: false, slack: false, elevenlabs: false },
         }));
         setAgents(agentsList);
 
