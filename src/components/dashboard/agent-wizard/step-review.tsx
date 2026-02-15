@@ -7,9 +7,11 @@ import { ArrowLeft, Rocket, Bot, Brain, Clock } from "lucide-react";
 import type { CreateAgentData } from "@/lib/validators/agent";
 
 const LLM_PROVIDER_NAMES: Record<string, string> = {
+  openrouter: "Aura Managed (OpenRouter)",
   openai: "OpenAI",
   anthropic: "Anthropic",
   google: "Google",
+  xai: "xAI",
   groq: "Groq",
   custom: "Custom",
 };
@@ -97,7 +99,7 @@ export function StepReview({
                 Provider
               </label>
               <p className="mt-1 text-aura-text-white font-medium">
-                {LLM_PROVIDER_NAMES[data.llmProvider || "openai"] || data.llmProvider}
+                {LLM_PROVIDER_NAMES[data.llmProvider || "openrouter"] || data.llmProvider}
               </p>
             </div>
             <div>
@@ -105,7 +107,7 @@ export function StepReview({
                 Model
               </label>
               <p className="mt-1 text-aura-text-white font-medium">
-                {data.llmModel || "gpt-4o-mini"}
+                {data.llmModel || "anthropic/claude-sonnet-4-5-20250929"}
               </p>
             </div>
           </div>

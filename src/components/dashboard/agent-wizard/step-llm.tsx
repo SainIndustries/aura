@@ -18,12 +18,31 @@ import { cn } from "@/lib/utils";
 
 const LLM_PROVIDERS = [
   {
+    id: "openrouter",
+    name: "Aura Managed",
+    models: [
+      { id: "anthropic/claude-sonnet-4-5-20250929", name: "Claude Sonnet 4.5", description: "Best balance of speed and quality" },
+      { id: "anthropic/claude-opus-4-6", name: "Claude Opus 4.6", description: "Most capable, complex tasks" },
+      { id: "anthropic/claude-haiku-4-5-20251001", name: "Claude Haiku 4.5", description: "Fast and efficient" },
+      { id: "openai/gpt-4.1", name: "GPT-4.1", description: "OpenAI's latest flagship" },
+      { id: "openai/gpt-4.1-mini", name: "GPT-4.1 Mini", description: "Fast and affordable" },
+      { id: "google/gemini-2.5-pro", name: "Gemini 2.5 Pro", description: "Google's most capable" },
+      { id: "google/gemini-2.5-flash", name: "Gemini 2.5 Flash", description: "Fast and cost-effective" },
+      { id: "meta-llama/llama-4-maverick", name: "Llama 4 Maverick", description: "Meta's latest open model" },
+      { id: "deepseek/deepseek-r1", name: "DeepSeek R1", description: "Strong reasoning, open source" },
+    ],
+    icon: "🔮",
+    managed: true,
+  },
+  {
     id: "openai",
     name: "OpenAI",
     models: [
-      { id: "gpt-4o", name: "GPT-4o", description: "Most capable, best for complex tasks" },
-      { id: "gpt-4o-mini", name: "GPT-4o Mini", description: "Fast and affordable" },
-      { id: "gpt-4-turbo", name: "GPT-4 Turbo", description: "Powerful with larger context" },
+      { id: "gpt-4.1", name: "GPT-4.1", description: "Latest and most capable" },
+      { id: "gpt-4.1-mini", name: "GPT-4.1 Mini", description: "Fast and affordable" },
+      { id: "gpt-4.1-nano", name: "GPT-4.1 Nano", description: "Fastest, lowest cost" },
+      { id: "o3", name: "o3", description: "Advanced reasoning model" },
+      { id: "o4-mini", name: "o4-mini", description: "Fast reasoning model" },
     ],
     icon: "🤖",
   },
@@ -31,9 +50,9 @@ const LLM_PROVIDERS = [
     id: "anthropic",
     name: "Anthropic",
     models: [
-      { id: "claude-3-5-sonnet-20241022", name: "Claude 3.5 Sonnet", description: "Excellent for most tasks" },
-      { id: "claude-3-opus-20240229", name: "Claude 3 Opus", description: "Most capable Claude model" },
-      { id: "claude-3-haiku-20240307", name: "Claude 3 Haiku", description: "Fast and efficient" },
+      { id: "claude-opus-4-6", name: "Claude Opus 4.6", description: "Most capable, best for complex tasks" },
+      { id: "claude-sonnet-4-5-20250929", name: "Claude Sonnet 4.5", description: "Excellent balance of speed and quality" },
+      { id: "claude-haiku-4-5-20251001", name: "Claude Haiku 4.5", description: "Fast and efficient" },
     ],
     icon: "🧠",
   },
@@ -41,17 +60,28 @@ const LLM_PROVIDERS = [
     id: "google",
     name: "Google",
     models: [
-      { id: "gemini-1.5-pro", name: "Gemini 1.5 Pro", description: "Advanced reasoning" },
-      { id: "gemini-1.5-flash", name: "Gemini 1.5 Flash", description: "Fast responses" },
+      { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro", description: "Most capable, advanced reasoning" },
+      { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash", description: "Fast and cost-effective" },
+      { id: "gemini-2.0-flash", name: "Gemini 2.0 Flash", description: "Lightweight, low latency" },
     ],
     icon: "✨",
+  },
+  {
+    id: "xai",
+    name: "xAI",
+    models: [
+      { id: "grok-3", name: "Grok 3", description: "Most capable xAI model" },
+      { id: "grok-3-mini", name: "Grok 3 Mini", description: "Fast reasoning model" },
+    ],
+    icon: "🅧",
   },
   {
     id: "groq",
     name: "Groq",
     models: [
-      { id: "llama-3.1-70b-versatile", name: "Llama 3.1 70B", description: "Open source, very fast" },
-      { id: "mixtral-8x7b-32768", name: "Mixtral 8x7B", description: "Great balance of speed and quality" },
+      { id: "llama-4-maverick-17b-128e", name: "Llama 4 Maverick", description: "Latest Meta model, ultra fast" },
+      { id: "llama-3.3-70b-versatile", name: "Llama 3.3 70B", description: "Open source, versatile" },
+      { id: "deepseek-r1-distill-llama-70b", name: "DeepSeek R1 70B", description: "Strong reasoning, open source" },
     ],
     icon: "⚡",
   },
@@ -196,17 +226,41 @@ export function StepLLM({ form, onBack, onNext }: StepLLMProps) {
         </p>
       </div>
 
-      {/* API Key Info */}
-      <div className="flex items-start gap-3 p-4 rounded-lg bg-aura-accent/5 border border-aura-accent/20">
-        <Info className="w-5 h-5 text-aura-accent flex-shrink-0 mt-0.5" />
-        <div className="text-sm">
-          <p className="text-aura-text-light font-medium">API Key Required</p>
-          <p className="text-aura-text-dim mt-1">
-            You'll need to provide your own API key for the selected provider. 
-            Add it in Settings → Integrations after creating your agent.
-          </p>
+      {/* Provider Info */}
+      {provider === "openrouter" ? (
+        <div className="flex items-start gap-3 p-4 rounded-lg bg-aura-mint/5 border border-aura-mint/20">
+          <Sparkles className="w-5 h-5 text-aura-mint flex-shrink-0 mt-0.5" />
+          <div className="text-sm">
+            <p className="text-aura-text-light font-medium">Powered by Aura — No API Key Needed</p>
+            <p className="text-aura-text-dim mt-1">
+              Your agent uses Aura&apos;s managed LLM infrastructure via OpenRouter.
+              Usage counts against your token balance (10M included monthly).
+            </p>
+          </div>
         </div>
-      </div>
+      ) : provider !== "custom" ? (
+        <div className="flex items-start gap-3 p-4 rounded-lg bg-aura-accent/5 border border-aura-accent/20">
+          <Info className="w-5 h-5 text-aura-accent flex-shrink-0 mt-0.5" />
+          <div className="text-sm">
+            <p className="text-aura-text-light font-medium">API Key Required</p>
+            <p className="text-aura-text-dim mt-1">
+              You&apos;ll need to provide your own API key for {selectedProvider?.name}.
+              Add it in Settings → Integrations after creating your agent.
+            </p>
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-start gap-3 p-4 rounded-lg bg-aura-accent/5 border border-aura-accent/20">
+          <Info className="w-5 h-5 text-aura-accent flex-shrink-0 mt-0.5" />
+          <div className="text-sm">
+            <p className="text-aura-text-light font-medium">Custom Endpoint</p>
+            <p className="text-aura-text-dim mt-1">
+              Your agent will connect to your self-hosted or custom LLM endpoint.
+              Make sure the endpoint is accessible from the agent&apos;s VM.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Navigation */}
       <div className="flex justify-between pt-4">

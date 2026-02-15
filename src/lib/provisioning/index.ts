@@ -2,6 +2,9 @@ import { db } from "@/lib/db";
 import { agentInstances, agents } from "@/lib/db/schema";
 import { eq, and, desc, ne } from "drizzle-orm";
 import { simulateProvisioning, simulateTermination } from "./simulator";
+import { provisionServer, terminateServer } from "./hetzner";
+
+const USE_HETZNER = !!process.env.HETZNER_API_TOKEN;
 
 export type ProvisioningStatus = {
   id: string;
@@ -99,11 +102,18 @@ export async function queueAgentProvisioning(agentId: string, region: string = "
 
   console.log(`[Provisioning] Queued agent ${agentId} for provisioning in region ${region}`);
   console.log(`[Provisioning] Instance ${instance.id} created with status: pending`);
+  console.log(`[Provisioning] Using ${USE_HETZNER ? "Hetzner Cloud" : "simulator"}`);
 
-  // Start the simulation (non-blocking)
-  simulateProvisioning(instance.id).catch((err) => {
-    console.error(`[Provisioning] Simulation error for instance ${instance.id}:`, err);
-  });
+  // Start provisioning (non-blocking)
+  if (USE_HETZNER) {
+    provisionServer(instance.id).catch((err) => {
+      console.error(`[Provisioning] Hetzner error for instance ${instance.id}:`, err);
+    });
+  } else {
+    simulateProvisioning(instance.id).catch((err) => {
+      console.error(`[Provisioning] Simulation error for instance ${instance.id}:`, err);
+    });
+  }
 
   return instance as ProvisioningStatus;
 }
@@ -157,13 +167,17 @@ export async function stopAgentInstance(agentId: string): Promise<ProvisioningSt
     .returning();
 
   console.log(`[Provisioning] Stopping instance ${instance.id}`);
-  console.log(`[Provisioning] Would call: Hetzner API to delete server ${instance.serverId}`);
-  console.log(`[Provisioning] Would call: Tailscale API to remove device`);
 
-  // Start termination simulation (non-blocking)
-  simulateTermination(instance.id).catch((err) => {
-    console.error(`[Provisioning] Termination simulation error for instance ${instance.id}:`, err);
-  });
+  // Start termination (non-blocking)
+  if (USE_HETZNER) {
+    terminateServer(instance.id).catch((err) => {
+      console.error(`[Provisioning] Hetzner termination error for instance ${instance.id}:`, err);
+    });
+  } else {
+    simulateTermination(instance.id).catch((err) => {
+      console.error(`[Provisioning] Simulation termination error for instance ${instance.id}:`, err);
+    });
+  }
 
   return updatedInstance as ProvisioningStatus;
 }

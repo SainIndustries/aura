@@ -23,6 +23,12 @@ export async function createAgent(formData: unknown) {
     heartbeatEnabled: parsed.heartbeatEnabled,
     heartbeatCron: parsed.heartbeatCron,
     status: "draft",
+    config: {
+      llmProvider: parsed.llmProvider,
+      llmModel: parsed.llmModel,
+      llmTemperature: parsed.llmTemperature,
+      llmCustomEndpoint: parsed.llmCustomEndpoint,
+    },
   });
 
   redirect("/agents");
@@ -49,6 +55,12 @@ export async function updateAgent(id: string, formData: unknown) {
       goal: parsed.goal,
       heartbeatEnabled: parsed.heartbeatEnabled,
       heartbeatCron: parsed.heartbeatCron,
+      config: {
+        llmProvider: parsed.llmProvider,
+        llmModel: parsed.llmModel,
+        llmTemperature: parsed.llmTemperature,
+        llmCustomEndpoint: parsed.llmCustomEndpoint,
+      },
       updatedAt: new Date(),
     })
     .where(eq(agents.id, id));

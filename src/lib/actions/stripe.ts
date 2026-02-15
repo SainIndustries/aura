@@ -6,6 +6,7 @@ import { getCurrentUser } from "@/lib/auth/current-user";
 import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { TOKEN_PACKAGES, type TokenPackageId } from "@/lib/billing/token-packages";
 
 export async function createCheckoutSession() {
   const user = await getCurrentUser();
@@ -41,6 +42,50 @@ export async function createCheckoutSession() {
     },
     success_url: `${process.env.NEXT_PUBLIC_APP_URL}/settings?success=true`,
     cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/settings?canceled=true`,
+  });
+
+  if (session.url) {
+    redirect(session.url);
+  }
+}
+
+export async function createTopUpCheckout(packageId: TokenPackageId) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("Unauthorized");
+
+  if (!user.stripeCustomerId) {
+    throw new Error("No billing account. Subscribe first.");
+  }
+
+  const pkg = TOKEN_PACKAGES.find((p) => p.id === packageId);
+  if (!pkg) throw new Error("Invalid package");
+
+  const stripe = getStripe();
+
+  const session = await stripe.checkout.sessions.create({
+    customer: user.stripeCustomerId,
+    mode: "payment",
+    line_items: [
+      {
+        price_data: {
+          currency: "usd",
+          product_data: {
+            name: `Aura ${pkg.name}`,
+            description: `${pkg.description} token top-up`,
+          },
+          unit_amount: pkg.priceCents,
+        },
+        quantity: 1,
+      },
+    ],
+    metadata: {
+      type: "token_topup",
+      package_id: pkg.id,
+      tokens: String(pkg.tokens),
+      user_id: user.id,
+    },
+    success_url: `${process.env.NEXT_PUBLIC_APP_URL}/settings?topup=success`,
+    cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/settings?topup=canceled`,
   });
 
   if (session.url) {

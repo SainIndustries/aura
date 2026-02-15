@@ -423,6 +423,52 @@ export const callLogsRelations = relations(callLogs, ({ one }) => ({
   }),
 }));
 
+// Token Balances — tracks per-user token allocation and usage
+export const tokenBalances = pgTable("token_balances", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id")
+    .references(() => users.id, { onDelete: "cascade" })
+    .notNull()
+    .unique(),
+  balance: integer("balance").notNull().default(0),
+  monthlyAllocation: integer("monthly_allocation").notNull().default(10_000_000),
+  totalUsed: integer("total_used").notNull().default(0),
+  totalPurchased: integer("total_purchased").notNull().default(0),
+  lastResetAt: timestamp("last_reset_at", { withTimezone: true }),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});
+
+export const tokenBalancesRelations = relations(tokenBalances, ({ one }) => ({
+  user: one(users, {
+    fields: [tokenBalances.userId],
+    references: [users.id],
+  }),
+}));
+
+// Token Top-Ups — records of purchased token packs
+export const tokenTopUps = pgTable("token_top_ups", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id")
+    .references(() => users.id, { onDelete: "cascade" })
+    .notNull(),
+  stripeSessionId: text("stripe_session_id"),
+  tokensAdded: integer("tokens_added").notNull(),
+  amountPaid: integer("amount_paid").notNull(), // cents
+  packageId: text("package_id"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});
+
+export const tokenTopUpsRelations = relations(tokenTopUps, ({ one }) => ({
+  user: one(users, {
+    fields: [tokenTopUps.userId],
+    references: [users.id],
+  }),
+}));
+
 // Waitlist enum for deployment preference
 export const deploymentPreferenceEnum = pgEnum("deployment_preference", [
   "cloud",
