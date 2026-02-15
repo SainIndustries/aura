@@ -81,7 +81,7 @@ export async function GET(request: Request) {
     }
 
     // Generate state for CSRF protection
-    const state = await generateState();
+    const state = await generateState(user.id);
 
     const MAILCHIMP_REDIRECT_URI = `${process.env.NEXT_PUBLIC_APP_URL}/api/integrations/mailchimp/callback`;
 

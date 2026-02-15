@@ -27,7 +27,7 @@ export async function GET() {
     }
 
     // Generate state for CSRF protection
-    const state = await generateState();
+    const state = await generateState(user.id);
 
     // Build the Xero OAuth authorization URL
     const authUrl = new URL(

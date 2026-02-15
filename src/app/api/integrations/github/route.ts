@@ -32,7 +32,7 @@ export async function GET() {
     }
 
     // Generate state for CSRF protection
-    const state = await generateState();
+    const state = await generateState(user.id);
 
     // Build the GitHub OAuth authorization URL
     const authUrl = new URL("https://github.com/login/oauth/authorize");

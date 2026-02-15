@@ -180,7 +180,7 @@ describe("Zendesk Integration", () => {
     });
 
     it("should redirect with error if state validation fails", async () => {
-      vi.mocked(validateState).mockResolvedValue(false);
+      vi.mocked(validateState).mockResolvedValue(null);
 
       const request = new Request(
         "http://localhost:3000/api/integrations/zendesk/callback?code=test-code&state=invalid-state:test"

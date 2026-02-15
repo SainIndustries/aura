@@ -29,7 +29,7 @@ export async function GET() {
     }
 
     // Generate state for CSRF protection (stored in callback URL)
-    const state = await generateState();
+    const state = await generateState(user.id);
 
     // Trello uses a different OAuth approach - direct token authorization
     // The callback_method=fragment returns the token as a URL fragment

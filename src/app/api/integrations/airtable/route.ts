@@ -38,7 +38,7 @@ export async function GET() {
     }
 
     // Generate state for CSRF protection
-    const state = await generateState();
+    const state = await generateState(user.id);
 
     // Generate PKCE values (Airtable requires PKCE)
     const { codeVerifier, codeChallenge } = generatePKCE();

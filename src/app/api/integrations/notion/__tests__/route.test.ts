@@ -126,7 +126,7 @@ describe("Notion OAuth Integration", () => {
 
     it("should redirect with error if state validation fails", async () => {
       vi.stubEnv('NEXT_PUBLIC_APP_URL', 'http://localhost:3000');
-      vi.mocked(validateState).mockResolvedValue(false);
+      vi.mocked(validateState).mockResolvedValue(null);
 
       const { GET: CallbackGET } = await import("../callback/route");
       const request = new Request(

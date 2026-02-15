@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth/current-user";
 import { validateState } from "@/lib/integrations/oauth-state";
 import { encryptToken } from "@/lib/integrations/encryption";
 import { db } from "@/lib/db";
@@ -49,18 +48,13 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Validate CSRF state
-    const isValidState = await validateState(state);
-    if (!isValidState) {
-      return NextResponse.redirect(
-        `${baseUrl}/integrations?error=invalid_state`
+    // Validate CSRF state and extract userId
+    const userId = await validateState(state);
+    if (!userId) {
+      return new Response(
+        `<html><body><script>window.close();</script><p>Invalid state. Please try again.</p></body></html>`,
+        { headers: { "Content-Type": "text/html" } }
       );
-    }
-
-    // Check if user is authenticated
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.redirect(`${baseUrl}/sign-in?redirect=/integrations`);
     }
 
     // Exchange code for tokens
@@ -118,7 +112,7 @@ export async function GET(request: NextRequest) {
     // Check if integration already exists
     const existing = await db.query.integrations.findFirst({
       where: and(
-        eq(integrations.userId, user.id),
+        eq(integrations.userId, userId),
         eq(integrations.provider, "google")
       ),
     });
@@ -145,18 +139,23 @@ export async function GET(request: NextRequest) {
     } else {
       // Create new integration
       await db.insert(integrations).values({
-        userId: user.id,
+        userId,
         provider: "google",
         ...integrationData,
         connectedAt: new Date(),
       });
     }
 
-    return NextResponse.redirect(`${baseUrl}/integrations?success=google`);
+    // Close the popup — the chat page polls for connection status
+    return new Response(
+      `<html><body><script>window.close();</script><p>Connected! You can close this window.</p></body></html>`,
+      { headers: { "Content-Type": "text/html" } }
+    );
   } catch (error) {
     console.error("Error in Google OAuth callback:", error);
-    return NextResponse.redirect(
-      `${baseUrl}/integrations?error=callback_failed`
+    return new Response(
+      `<html><body><script>window.close();</script><p>Something went wrong. You can close this window.</p></body></html>`,
+      { headers: { "Content-Type": "text/html" } }
     );
   }
 }

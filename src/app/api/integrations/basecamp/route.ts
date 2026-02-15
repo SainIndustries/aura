@@ -24,7 +24,7 @@ export async function GET() {
     }
 
     // Generate state for CSRF protection
-    const state = await generateState();
+    const state = await generateState(user.id);
 
     // Build the Basecamp (37signals) OAuth authorization URL
     const authUrl = new URL("https://launchpad.37signals.com/authorization/new");

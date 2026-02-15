@@ -35,8 +35,8 @@ export async function GET() {
       );
     }
 
-    // Generate state for CSRF protection
-    const state = await generateState();
+    // Generate state embedding userId for CSRF protection
+    const state = await generateState(user.id);
 
     // Build the Google OAuth authorization URL
     const authUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");

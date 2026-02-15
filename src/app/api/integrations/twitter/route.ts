@@ -81,7 +81,7 @@ export async function GET(request: Request) {
     }
 
     // Generate state and PKCE code verifier for CSRF protection
-    const state = await generateState();
+    const state = await generateState(user.id);
     
     // Generate PKCE code verifier and challenge (Twitter requires PKCE)
     const codeVerifier = crypto.randomBytes(32).toString("base64url");
