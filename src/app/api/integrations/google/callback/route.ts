@@ -4,6 +4,7 @@ import { encryptToken } from "@/lib/integrations/encryption";
 import { db } from "@/lib/db";
 import { agents, integrations } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
+import { pushGoogleCredentialsToRunningInstances } from "@/lib/integrations/credential-push";
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
@@ -151,6 +152,11 @@ export async function GET(request: NextRequest) {
         connectedAt: new Date(),
       });
     }
+
+    // Push credentials to any running OpenClaw VMs (fire-and-forget)
+    pushGoogleCredentialsToRunningInstances(userId).catch((err) => {
+      console.error("[Google OAuth callback] Failed to push credentials to VMs:", err);
+    });
 
     // Auto-enable Google on the agent that initiated this OAuth flow
     if (agentId) {

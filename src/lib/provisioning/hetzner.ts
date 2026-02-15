@@ -1,8 +1,14 @@
 import { randomBytes } from "crypto";
 import { db } from "@/lib/db";
-import { agents, agentInstances } from "@/lib/db/schema";
+import { agents, agentInstances, integrations } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { updateInstanceStatus } from "./index";
+import { decryptToken } from "@/lib/integrations/encryption";
+import {
+  generateGoogleApiJs,
+  generateSkillMd,
+  generateCredReceiverJs,
+} from "./vm-google-skill";
 
 // ---------------------------------------------------------------------------
 // Hetzner Cloud API client for provisioning OpenClaw agent VMs
@@ -91,7 +97,22 @@ interface AgentConfig {
   heartbeatCron?: string | null;
 }
 
-function generateCloudInit(agentConfig: AgentConfig, instanceId: string, gatewayToken: string): string {
+/** Google OAuth credentials to pre-populate on the VM during provisioning */
+export interface GoogleCredentials {
+  email: string;
+  accessToken: string;
+  refreshToken: string;
+  tokenExpiry: string;       // ISO 8601
+  clientId: string;
+  clientSecret: string;
+}
+
+function generateCloudInit(
+  agentConfig: AgentConfig,
+  instanceId: string,
+  gatewayToken: string,
+  googleCreds?: GoogleCredentials | null,
+): string {
   const provider = agentConfig.llmProvider ?? "openrouter";
   const isOpenRouter = provider === "openrouter";
 
@@ -122,7 +143,7 @@ function generateCloudInit(agentConfig: AgentConfig, instanceId: string, gateway
   }
 
   // Build OpenClaw config matching the documented schema
-  const openclawConfig = {
+  const openclawConfig: Record<string, unknown> = {
     gateway: {
       mode: "local" as const,
       port: 18789,
@@ -143,14 +164,39 @@ function generateCloudInit(agentConfig: AgentConfig, instanceId: string, gateway
         },
       },
     },
+    skills: {
+      load: {
+        extraDirs: ["/root/google-workspace-skill"],
+      },
+    },
     env: envKeys,
   };
 
   // JSON.stringify handles escaping for us — no manual quote escaping needed
   const configJson = JSON.stringify(openclawConfig, null, 2);
 
-  // Indent JSON for YAML write_files content block (6 spaces to align under `content: |`)
-  const indentedConfig = configJson.split("\n").map((l) => "      " + l).join("\n");
+  // Indent helper for YAML write_files content blocks (6 spaces to align under `content: |`)
+  const indent = (s: string) => s.split("\n").map((l) => "      " + l).join("\n");
+
+  const indentedConfig = indent(configJson);
+
+  // --- Generate VM skill files ---
+  const googleApiJs = generateGoogleApiJs();
+  const skillMd = generateSkillMd();
+  const credReceiverJs = generateCredReceiverJs(gatewayToken);
+
+  // Pre-populate Google credentials if the user already connected Google
+  let googleCredsFile = "";
+  if (googleCreds) {
+    const credsJson = JSON.stringify(googleCreds, null, 2);
+    googleCredsFile = `
+  - path: /root/.google-creds/tokens.json
+    owner: root:root
+    permissions: "0600"
+    content: |
+${indent(credsJson)}
+`;
+  }
 
   return `#cloud-config
 package_update: false
@@ -183,6 +229,44 @@ ${indentedConfig}
       [Install]
       WantedBy=multi-user.target
 
+  - path: /root/google-workspace-skill/SKILL.md
+    owner: root:root
+    permissions: "0644"
+    content: |
+${indent(skillMd)}
+
+  - path: /root/google-workspace-skill/google-api.js
+    owner: root:root
+    permissions: "0755"
+    content: |
+${indent(googleApiJs)}
+
+  - path: /root/cred-receiver/server.js
+    owner: root:root
+    permissions: "0600"
+    content: |
+${indent(credReceiverJs)}
+
+  - path: /etc/systemd/system/cred-receiver.service
+    owner: root:root
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=Google Credential Receiver
+      After=network-online.target
+      Wants=network-online.target
+
+      [Service]
+      Type=simple
+      User=root
+      Environment=HOME=/root
+      ExecStart=/usr/bin/node /root/cred-receiver/server.js
+      Restart=always
+      RestartSec=5
+
+      [Install]
+      WantedBy=multi-user.target
+${googleCredsFile}
 runcmd:
   # --- Add ALL repos first, then one apt-get update + install ---
   - curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
@@ -195,12 +279,15 @@ runcmd:
   - npm install -g openclaw@latest
 
   # --- Overwrite Caddy config AFTER apt install (avoids dpkg prompt conflict) ---
+  # Caddy routes: /internal/google-credentials → cred-receiver, everything else → OpenClaw gateway
   - cp /etc/caddy/Caddyfile /etc/caddy/Caddyfile.dist
-  - printf ':443 {\\n  reverse_proxy localhost:18789\\n  tls internal\\n}\\n:80 {\\n  reverse_proxy localhost:18789\\n}\\n' > /etc/caddy/Caddyfile
+  - printf ':443 {\\n  handle /internal/google-credentials {\\n    reverse_proxy localhost:18790\\n    rewrite * /credentials/google\\n  }\\n  handle {\\n    reverse_proxy localhost:18789\\n  }\\n  tls internal\\n}\\n:80 {\\n  handle /internal/google-credentials {\\n    reverse_proxy localhost:18790\\n    rewrite * /credentials/google\\n  }\\n  handle {\\n    reverse_proxy localhost:18789\\n  }\\n}\\n' > /etc/caddy/Caddyfile
 
   # --- Start services (openclaw config written by write_files) ---
   - systemctl daemon-reload
   - systemctl enable openclaw-gateway
+  - systemctl enable cred-receiver
+  - systemctl start cred-receiver
   - systemctl start openclaw-gateway
   - systemctl restart caddy
 
@@ -454,8 +541,35 @@ export async function createServerForInstance(instanceId: string): Promise<void>
   const location = resolveLocation(region);
 
   try {
+    // Look up user's Google credentials so we can pre-populate them on the VM
+    let googleCreds: GoogleCredentials | null = null;
+    const googleIntegration = await db.query.integrations.findFirst({
+      where: and(
+        eq(integrations.userId, agent.userId),
+        eq(integrations.provider, "google"),
+      ),
+    });
+    if (googleIntegration?.accessToken && googleIntegration?.refreshToken) {
+      try {
+        const metadata = googleIntegration.metadata as { email?: string } | null;
+        googleCreds = {
+          email: metadata?.email ?? "",
+          accessToken: decryptToken(googleIntegration.accessToken),
+          refreshToken: decryptToken(googleIntegration.refreshToken),
+          tokenExpiry: googleIntegration.tokenExpiry
+            ? new Date(googleIntegration.tokenExpiry).toISOString()
+            : new Date(Date.now() + 3600_000).toISOString(),
+          clientId: process.env.GOOGLE_CLIENT_ID ?? "",
+          clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
+        };
+        console.log(`[Hetzner] Pre-populating Google credentials for ${metadata?.email ?? "user"}`);
+      } catch (err) {
+        console.warn(`[Hetzner] Could not decrypt Google credentials, skipping pre-population:`, err);
+      }
+    }
+
     const gatewayToken = randomBytes(32).toString("hex");
-    const userData = generateCloudInit(agentConfig, instanceId, gatewayToken);
+    const userData = generateCloudInit(agentConfig, instanceId, gatewayToken, googleCreds);
 
     const slug = agent.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
     const serverName = `aura-${slug || "agent"}-${instanceId.slice(0, 8)}`;
