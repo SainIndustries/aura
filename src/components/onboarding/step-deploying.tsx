@@ -245,7 +245,7 @@ export function StepDeploying({ agentId }: { agentId: string }) {
               </p>
             </div>
             <Link
-              href="/chat"
+              href={`/chat?agentId=${agentId}`}
               className="flex items-center justify-center gap-2 rounded-full bg-aura-accent text-white px-6 py-3 text-sm font-medium hover:bg-aura-accent-bright transition-all mx-auto w-fit"
             >
               <MessageSquare className="w-4 h-4" />

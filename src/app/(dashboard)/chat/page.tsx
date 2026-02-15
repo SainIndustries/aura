@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import { usePrivy } from "@privy-io/react-auth";
 import NextLink from "next/link";
 import ReactMarkdown from "react-markdown";
@@ -91,6 +92,7 @@ type Message = {
 
 export default function ChatPage() {
   const { user } = usePrivy();
+  const searchParams = useSearchParams();
   const { hasRunningAgent, agentName, agents, selectedAgentId, setSelectedAgentId, refresh } = useAgentStatus();
   const [statusChecked, setStatusChecked] = useState(false);
 
@@ -98,6 +100,14 @@ export default function ChatPage() {
   useEffect(() => {
     refresh().then(() => setStatusChecked(true));
   }, [refresh]);
+
+  // If agentId is in the URL (e.g. from "Start Chatting" after wizard), select that agent
+  useEffect(() => {
+    const agentIdParam = searchParams.get("agentId");
+    if (agentIdParam && agents.some((a) => a.id === agentIdParam)) {
+      setSelectedAgentId(agentIdParam);
+    }
+  }, [searchParams, agents, setSelectedAgentId]);
   const [messages, setMessages] = useState<Message[]>([]);
 
   // Initialize / update welcome message when agentName changes
@@ -627,7 +637,7 @@ export default function ChatPage() {
             </DialogContent>
           </Dialog>
         </div>
-        <div className="flex items-end gap-2">
+        <div className="flex items-center gap-2">
           <div className="flex-1 relative">
             <textarea
               value={input}
