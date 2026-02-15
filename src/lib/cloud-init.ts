@@ -26,7 +26,7 @@ export function generateCloudInitConfig(params: CloudInitParams): string {
   const config = `#cloud-config
 runcmd:
   - systemctl restart systemd-timesyncd
-  - timeout 60 bash -c 'until timedatectl status | grep -q "System clock synchronized: yes"; do sleep 1; done'
+  - "timeout 60 bash -c 'until timedatectl status | grep -q synchronized; do sleep 1; done' || true"
   - curl -fsSL https://tailscale.com/install.sh | sh
   - tailscale up --auth-key=${tailscaleAuthKey} --advertise-tags=tag:agent --hostname=${hostname}
 `;
@@ -54,14 +54,9 @@ export function generateSnapshotCloudInitConfig(params: CloudInitParams): string
 
   const config = `#cloud-config
 runcmd:
-  # Sync system clock
   - systemctl restart systemd-timesyncd
-  - timeout 60 bash -c 'until timedatectl status | grep -q "System clock synchronized: yes"; do sleep 1; done' || true
-  
-  # Enroll in Tailscale (already installed in snapshot)
+  - "timeout 60 bash -c 'until timedatectl status | grep -q synchronized; do sleep 1; done' || true"
   - tailscale up --auth-key=${tailscaleAuthKey} --advertise-tags=tag:agent --hostname=${hostname}
-  
-  # Signal cloud-init completion for Ansible
   - echo "cloud-init complete" > /tmp/cloud-init-done
 `;
 
