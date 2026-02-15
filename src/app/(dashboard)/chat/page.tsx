@@ -427,11 +427,11 @@ export default function ChatPage() {
   return (
     <div className="flex flex-col h-[calc(100dvh-2rem)] max-w-4xl mx-auto">
       {/* Header */}
-      <div className="flex items-center gap-3 sm:gap-4 p-3 sm:p-4 border-b border-aura-border">
-        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-aura-accent to-aura-purple flex items-center justify-center">
+      <div className="flex flex-wrap items-center gap-2 sm:gap-4 p-3 sm:p-4 border-b border-aura-border">
+        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-aura-accent to-aura-purple flex items-center justify-center flex-shrink-0">
           <Bot className="w-5 h-5 text-white" />
         </div>
-        <div>
+        <div className="min-w-0">
           {agents.length >= 2 && selectedAgentId ? (
             <Select value={selectedAgentId} onValueChange={setSelectedAgentId}>
               <SelectTrigger className="border-none shadow-none bg-transparent px-0 h-auto text-aura-text-white font-semibold text-base gap-1">
@@ -455,23 +455,23 @@ export default function ChatPage() {
           )}
           <p className="text-sm text-aura-text-dim">Your AI Agent</p>
         </div>
-        <div className="ml-auto flex items-center flex-wrap gap-1.5 sm:gap-2">
+        <div className="ml-auto flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
           {agentGoogleEnabled && (
-            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-aura-accent/10 text-aura-accent text-xs font-medium">
-              <Mail className="w-3 h-3" />
-              Gmail & Calendar
+            <div className="flex items-center gap-1.5 px-2 sm:px-3 py-1 rounded-full bg-aura-accent/10 text-aura-accent text-xs font-medium">
+              <Mail className="w-3 h-3 flex-shrink-0" />
+              <span className="hidden sm:inline">Gmail & Calendar</span>
             </div>
           )}
           {agentSlackEnabled && (
-            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-aura-purple/10 text-aura-purple text-xs font-medium">
-              <Hash className="w-3 h-3" />
-              Slack
+            <div className="flex items-center gap-1.5 px-2 sm:px-3 py-1 rounded-full bg-aura-purple/10 text-aura-purple text-xs font-medium">
+              <Hash className="w-3 h-3 flex-shrink-0" />
+              <span className="hidden sm:inline">Slack</span>
             </div>
           )}
           {agents.find((a) => a.id === selectedAgentId)?.running && (
-            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-aura-mint/10 text-aura-mint text-xs font-medium">
-              <span className="w-2 h-2 rounded-full bg-aura-mint animate-pulse" />
-              Agent Live
+            <div className="flex items-center gap-1.5 px-2 sm:px-3 py-1 rounded-full bg-aura-mint/10 text-aura-mint text-xs font-medium">
+              <span className="w-2 h-2 rounded-full bg-aura-mint animate-pulse flex-shrink-0" />
+              <span className="hidden sm:inline">Agent Live</span>
             </div>
           )}
         </div>
@@ -556,9 +556,9 @@ export default function ChatPage() {
       </div>
 
       {/* Input area */}
-      <div className="p-4 border-t border-aura-border">
+      <div className="p-3 sm:p-4 border-t border-aura-border pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:pb-[calc(1rem+env(safe-area-inset-bottom))]">
         {/* Tool connection buttons */}
-        <div className="flex items-center gap-2 mb-3 flex-nowrap overflow-x-auto scrollbar-none">
+        <div className="flex items-center gap-2 mb-2 sm:mb-3 flex-nowrap overflow-x-auto scrollbar-none">
           {!agentGoogleEnabled && (
             <button
               type="button"
@@ -633,22 +633,21 @@ export default function ChatPage() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Type a message or click the mic to speak..."
-              className="w-full resize-none rounded-xl border border-aura-border bg-aura-surface px-4 py-3 pr-12 text-aura-text-white placeholder:text-aura-text-ghost focus:border-aura-accent focus:outline-none focus:ring-1 focus:ring-aura-accent"
+              placeholder="Type a message..."
+              className="w-full resize-none rounded-xl border border-aura-border bg-aura-surface pl-4 pr-11 py-3 text-sm sm:text-base text-aura-text-white placeholder:text-aura-text-ghost focus:border-aura-accent focus:outline-none focus:ring-1 focus:ring-aura-accent"
               rows={1}
               style={{
-                minHeight: "48px",
+                minHeight: "44px",
                 maxHeight: "200px",
               }}
             />
-            <Button
-              size="icon"
-              variant="ghost"
+            <button
+              type="button"
               onClick={toggleListening}
               className={cn(
-                "absolute right-2 bottom-2 h-8 w-8",
+                "absolute right-2 top-1/2 -translate-y-1/2 flex items-center justify-center h-8 w-8 rounded-lg transition-colors",
                 isListening
-                  ? "text-red-500 hover:text-red-400 bg-red-500/10"
+                  ? "text-red-500 bg-red-500/10"
                   : "text-aura-text-dim hover:text-aura-text-light"
               )}
             >
@@ -657,12 +656,12 @@ export default function ChatPage() {
               ) : (
                 <Mic className="w-4 h-4" />
               )}
-            </Button>
+            </button>
           </div>
           <Button
             onClick={sendMessage}
             disabled={!input.trim() || isLoading}
-            className="h-12 w-12 rounded-xl bg-aura-accent hover:bg-aura-accent-bright"
+            className="h-[44px] w-[44px] rounded-xl bg-aura-accent hover:bg-aura-accent-bright flex-shrink-0"
           >
             <Send className="w-5 h-5" />
           </Button>
