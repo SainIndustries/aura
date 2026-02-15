@@ -41,14 +41,14 @@ export function StepWritingStyle({
           How should I write?
         </h2>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {WRITING_STYLES.map((style) => (
           <button
             key={style.id}
             type="button"
             onClick={() => onChange(style.id)}
             className={cn(
-              "relative rounded-xl border p-5 text-left transition-all",
+              "relative rounded-xl border p-4 sm:p-5 text-left transition-all",
               value === style.id
                 ? "border-aura-accent bg-aura-accent/10 ring-1 ring-aura-accent"
                 : "border-aura-border bg-aura-surface hover:border-aura-border-hover"

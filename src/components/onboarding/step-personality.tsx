@@ -41,14 +41,14 @@ export function StepPersonality({
           What&apos;s my personality?
         </h2>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {PERSONALITIES.map((p) => (
           <button
             key={p.id}
             type="button"
             onClick={() => onChange(p.id)}
             className={cn(
-              "relative rounded-xl border p-5 text-left transition-all",
+              "relative rounded-xl border p-4 sm:p-5 text-left transition-all",
               value === p.id
                 ? "border-aura-accent bg-aura-accent/10 ring-1 ring-aura-accent"
                 : "border-aura-border bg-aura-surface hover:border-aura-border-hover"

@@ -175,7 +175,7 @@ export default function PrivacyPage() {
               <li>Withdraw consent at any time</li>
             </ul>
             <p className="text-muted-foreground leading-relaxed mt-4">
-              To exercise these rights, please contact us at privacy@sainindustries.com.
+              To exercise these rights, please contact us at business@sainindustries.com.
             </p>
           </section>
 
@@ -204,7 +204,7 @@ export default function PrivacyPage() {
             </p>
             <div className="mt-4 text-muted-foreground">
               <p>SAIN Industries, Inc.</p>
-              <p>Email: privacy@sainindustries.com</p>
+              <p>Email: business@sainindustries.com</p>
             </div>
           </section>
         </div>

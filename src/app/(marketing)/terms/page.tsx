@@ -202,7 +202,7 @@ export default function TermsPage() {
             </p>
             <div className="mt-4 text-muted-foreground">
               <p>SAIN Industries, Inc.</p>
-              <p>Email: legal@sainindustries.com</p>
+              <p>Email: business@sainindustries.com</p>
             </div>
           </section>
         </div>

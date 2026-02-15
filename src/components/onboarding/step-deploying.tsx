@@ -160,7 +160,7 @@ export function StepDeploying({ agentId }: { agentId: string }) {
         {state === "deploying" && (
           <div className="space-y-6 animate-fade-slide-up">
             <div className="text-center space-y-3">
-              <h2 className="text-2xl font-semibold text-aura-text-white">
+              <h2 className="text-xl sm:text-2xl font-semibold text-aura-text-white">
                 Setting up your agent...
               </h2>
               {/* Rotating quote */}
@@ -237,7 +237,7 @@ export function StepDeploying({ agentId }: { agentId: string }) {
         {state === "running" && (
           <div className="space-y-6 animate-fade-slide-up">
             <div className="text-center space-y-2">
-              <h2 className="text-2xl font-semibold text-aura-text-white">
+              <h2 className="text-xl sm:text-2xl font-semibold text-aura-text-white">
                 Your agent is live!
               </h2>
               <p className="text-sm text-aura-text-dim">
@@ -258,7 +258,7 @@ export function StepDeploying({ agentId }: { agentId: string }) {
         {state === "failed" && (
           <div className="space-y-6 animate-fade-slide-up">
             <div className="text-center space-y-2">
-              <h2 className="text-2xl font-semibold text-aura-text-white">
+              <h2 className="text-xl sm:text-2xl font-semibold text-aura-text-white">
                 Something went wrong
               </h2>
               <p className="text-sm text-destructive">{error}</p>

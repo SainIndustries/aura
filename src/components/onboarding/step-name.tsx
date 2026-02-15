@@ -29,7 +29,7 @@ export function StepName({
         onChange={(e) => onChange(e.target.value)}
         placeholder="Luna, Jarvis, Buddy..."
         maxLength={50}
-        className="w-full rounded-xl border border-aura-border bg-aura-surface px-5 py-4 text-lg text-aura-text-white placeholder:text-aura-text-ghost focus:border-aura-accent focus:outline-none focus:ring-1 focus:ring-aura-accent transition-colors"
+        className="w-full rounded-xl border border-aura-border bg-aura-surface px-4 py-3 text-base sm:px-5 sm:py-4 sm:text-lg text-aura-text-white placeholder:text-aura-text-ghost focus:border-aura-accent focus:outline-none focus:ring-1 focus:ring-aura-accent transition-colors"
       />
     </div>
   );

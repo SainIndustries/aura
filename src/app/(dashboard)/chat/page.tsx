@@ -429,7 +429,7 @@ export default function ChatPage() {
   return (
     <div className="flex flex-col h-[calc(100vh-2rem)] max-w-4xl mx-auto">
       {/* Header */}
-      <div className="flex items-center gap-4 p-4 border-b border-aura-border">
+      <div className="flex items-center gap-3 sm:gap-4 p-3 sm:p-4 border-b border-aura-border">
         <div className="w-10 h-10 rounded-full bg-gradient-to-br from-aura-accent to-aura-purple flex items-center justify-center">
           <Bot className="w-5 h-5 text-white" />
         </div>
@@ -457,7 +457,7 @@ export default function ChatPage() {
           )}
           <p className="text-sm text-aura-text-dim">Your AI Agent</p>
         </div>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex items-center flex-wrap gap-1.5 sm:gap-2">
           {agentGoogleEnabled && (
             <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-aura-accent/10 text-aura-accent text-xs font-medium">
               <Mail className="w-3 h-3" />
@@ -505,7 +505,7 @@ export default function ChatPage() {
             </div>
             <div
               className={cn(
-                "max-w-[75%] rounded-2xl px-4 py-3",
+                "max-w-[85%] sm:max-w-[75%] rounded-2xl px-4 py-3",
                 message.role === "user"
                   ? "bg-aura-accent text-white rounded-tr-sm"
                   : "bg-aura-surface border border-aura-border text-aura-text-light rounded-tl-sm"
@@ -560,12 +560,12 @@ export default function ChatPage() {
       {/* Input area */}
       <div className="p-4 border-t border-aura-border">
         {/* Tool connection buttons */}
-        <div className="flex items-center gap-2 mb-3 flex-wrap">
+        <div className="flex items-center gap-2 mb-3 flex-nowrap overflow-x-auto scrollbar-none">
           {!agentGoogleEnabled && (
             <button
               type="button"
               onClick={connectGoogleForAgent}
-              className="flex items-center gap-1.5 rounded-full border border-aura-border px-3.5 py-1.5 text-xs font-medium text-aura-text-light hover:border-aura-accent hover:text-aura-accent transition-colors"
+              className="flex items-center gap-1.5 rounded-full border border-aura-border px-3.5 py-1.5 text-xs font-medium text-aura-text-light hover:border-aura-accent hover:text-aura-accent transition-colors whitespace-nowrap flex-shrink-0"
             >
               <Mail className="w-3.5 h-3.5" />
               Connect Gmail
@@ -575,7 +575,7 @@ export default function ChatPage() {
             <button
               type="button"
               onClick={() => openOAuthPopup("slack")}
-              className="flex items-center gap-1.5 rounded-full border border-aura-border px-3.5 py-1.5 text-xs font-medium text-aura-text-light hover:border-aura-accent hover:text-aura-accent transition-colors"
+              className="flex items-center gap-1.5 rounded-full border border-aura-border px-3.5 py-1.5 text-xs font-medium text-aura-text-light hover:border-aura-accent hover:text-aura-accent transition-colors whitespace-nowrap flex-shrink-0"
             >
               <Hash className="w-3.5 h-3.5" />
               Connect Slack
@@ -583,14 +583,14 @@ export default function ChatPage() {
           )}
           <NextLink
             href="/integrations"
-            className="flex items-center gap-1.5 rounded-full border border-aura-border px-3.5 py-1.5 text-xs font-medium text-aura-text-light hover:border-aura-accent hover:text-aura-accent transition-colors"
+            className="flex items-center gap-1.5 rounded-full border border-aura-border px-3.5 py-1.5 text-xs font-medium text-aura-text-light hover:border-aura-accent hover:text-aura-accent transition-colors whitespace-nowrap flex-shrink-0"
           >
             <MessageCircle className="w-3.5 h-3.5" />
             Connect Telegram
           </NextLink>
           <NextLink
             href="/integrations"
-            className="flex items-center gap-1.5 rounded-full border border-aura-border px-3.5 py-1.5 text-xs font-medium text-aura-text-light hover:border-aura-accent hover:text-aura-accent transition-colors"
+            className="flex items-center gap-1.5 rounded-full border border-aura-border px-3.5 py-1.5 text-xs font-medium text-aura-text-light hover:border-aura-accent hover:text-aura-accent transition-colors whitespace-nowrap flex-shrink-0"
           >
             <Phone className="w-3.5 h-3.5" />
             Connect WhatsApp
@@ -599,7 +599,7 @@ export default function ChatPage() {
             <DialogTrigger asChild>
               <button
                 type="button"
-                className="flex items-center gap-1.5 rounded-full border border-dashed border-aura-border px-3.5 py-1.5 text-xs font-medium text-aura-text-dim hover:border-aura-accent hover:text-aura-accent transition-colors"
+                className="flex items-center gap-1.5 rounded-full border border-dashed border-aura-border px-3.5 py-1.5 text-xs font-medium text-aura-text-dim hover:border-aura-accent hover:text-aura-accent transition-colors whitespace-nowrap flex-shrink-0"
               >
                 <Plus className="w-3.5 h-3.5" />
                 Connect More
@@ -618,7 +618,7 @@ export default function ChatPage() {
                       <p className="text-xs font-medium text-aura-text-dim mb-2">
                         {categoryMeta[cat].label}
                       </p>
-                      <div className="grid grid-cols-2 gap-1.5">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                         {providers.map((p) => {
                           const Icon = p.icon;
                           return (

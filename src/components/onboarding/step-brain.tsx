@@ -46,7 +46,7 @@ export function StepBrain({
               type="button"
               onClick={() => onChange(option.id)}
               className={cn(
-                "w-full rounded-xl border p-5 text-left transition-all flex items-center gap-4",
+                "w-full rounded-xl border p-4 sm:p-5 text-left transition-all flex items-center gap-3 sm:gap-4",
                 value === option.id
                   ? "border-aura-accent bg-aura-accent/10 ring-1 ring-aura-accent"
                   : "border-aura-border bg-aura-surface hover:border-aura-border-hover"

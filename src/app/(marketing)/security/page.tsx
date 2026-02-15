@@ -97,10 +97,10 @@ export default function SecurityPage() {
             <p className="text-muted-foreground leading-relaxed">
               If you discover a security vulnerability, please report it to{" "}
               <a
-                href="mailto:security@sainindustries.com"
+                href="mailto:business@sainindustries.com"
                 className="text-blue-400 hover:text-blue-300 underline"
               >
-                security@sainindustries.com
+                business@sainindustries.com
               </a>
               . We appreciate responsible disclosure and will work with you to resolve issues promptly.
             </p>
@@ -113,7 +113,7 @@ export default function SecurityPage() {
             </p>
             <div className="mt-4 text-muted-foreground">
               <p>SAIN Industries, Inc.</p>
-              <p>Email: security@sainindustries.com</p>
+              <p>Email: business@sainindustries.com</p>
             </div>
           </section>
         </div>

@@ -168,10 +168,10 @@ function WizardFlow() {
       className="fixed inset-0 z-50 bg-aura-void flex flex-col items-center justify-center px-4"
       onKeyDown={handleKeyDown}
     >
-      <div className="w-full max-w-md space-y-8">
+      <div className="w-full max-w-md space-y-6 pb-[env(safe-area-inset-bottom)]">
         {/* Mascot + Agent name */}
         <div className="flex flex-col items-center gap-3">
-          <Mascot size={96} className="animate-float" />
+          <Mascot size={72} className="animate-float sm:w-24 sm:h-24" />
           {state.step > 0 && state.name && (
             <p className="text-sm font-medium text-aura-accent">
               {state.name}
@@ -235,7 +235,7 @@ function WizardFlow() {
             <button
               type="button"
               onClick={() => dispatch({ type: "BACK" })}
-              className="flex items-center gap-1 text-sm text-aura-text-dim hover:text-aura-text-light transition-colors"
+              className="flex items-center gap-1 text-sm text-aura-text-dim hover:text-aura-text-light transition-colors py-2 px-3"
             >
               <ArrowLeft className="w-4 h-4" />
               Back
@@ -248,7 +248,7 @@ function WizardFlow() {
             type="button"
             onClick={handleContinue}
             disabled={!canContinue(state) || isSubmitting}
-            className="rounded-full bg-aura-accent text-white px-6 py-2.5 text-sm font-medium hover:bg-aura-accent-bright disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center gap-2"
+            className="rounded-full bg-aura-accent text-white px-6 py-3 text-sm font-medium hover:bg-aura-accent-bright disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center gap-2"
           >
             {isSubmitting ? (
               <>
