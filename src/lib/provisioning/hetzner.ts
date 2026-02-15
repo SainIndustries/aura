@@ -92,57 +92,61 @@ interface AgentConfig {
 }
 
 function generateCloudInit(agentConfig: AgentConfig, instanceId: string, gatewayToken: string): string {
-  // Map Aura LLM provider names to OpenClaw env var names
-  const llmEnvVars: string[] = [];
   const provider = agentConfig.llmProvider ?? "openrouter";
   const isOpenRouter = provider === "openrouter";
-
-  if (isOpenRouter) {
-    // OpenRouter: single API key routes to any model
-    if (process.env.OPENROUTER_API_KEY) {
-      llmEnvVars.push(`OPENROUTER_API_KEY=${process.env.OPENROUTER_API_KEY}`);
-      llmEnvVars.push(`OPENAI_API_BASE=https://openrouter.ai/api/v1`);
-      llmEnvVars.push(`OPENAI_API_KEY=${process.env.OPENROUTER_API_KEY}`);
-    }
-  } else {
-    // Direct provider keys (BYOK)
-    if (process.env.OPENAI_API_KEY) {
-      llmEnvVars.push(`OPENAI_API_KEY=${process.env.OPENAI_API_KEY}`);
-    }
-    if (process.env.ANTHROPIC_API_KEY) {
-      llmEnvVars.push(`ANTHROPIC_API_KEY=${process.env.ANTHROPIC_API_KEY}`);
-    }
-    if (process.env.GOOGLE_API_KEY) {
-      llmEnvVars.push(`GOOGLE_API_KEY=${process.env.GOOGLE_API_KEY}`);
-    }
-    if (process.env.GROQ_API_KEY) {
-      llmEnvVars.push(`GROQ_API_KEY=${process.env.GROQ_API_KEY}`);
-    }
-    if (process.env.XAI_API_KEY) {
-      llmEnvVars.push(`XAI_API_KEY=${process.env.XAI_API_KEY}`);
-    }
-  }
 
   // For OpenRouter, model is already in provider/model format (e.g. "anthropic/claude-sonnet-4.5")
   // For direct providers, combine provider + model
   const model = agentConfig.llmModel ?? (isOpenRouter ? "anthropic/claude-sonnet-4.5" : "gpt-4.1-mini");
   const openclawModel = isOpenRouter ? model : `${provider}/${model}`;
 
-  // Build the system prompt from personality + goal
-  const systemPromptParts: string[] = [];
-  if (agentConfig.personality) {
-    systemPromptParts.push(agentConfig.personality);
-  }
-  if (agentConfig.goal) {
-    systemPromptParts.push(`Your goal: ${agentConfig.goal}`);
-  }
-  const systemPrompt = systemPromptParts.join("\n\n") || "You are a helpful AI assistant.";
+  // Build the env section for openclaw.json — API keys live here
+  const envKeys: Record<string, string> = {};
 
-  // Escape single quotes for YAML heredoc safety
-  const escapedSystemPrompt = systemPrompt.replace(/'/g, "''");
-  const escapedAgentName = (agentConfig.name || "Aura Agent").replace(/'/g, "''");
+  if (isOpenRouter) {
+    if (process.env.OPENROUTER_API_KEY) {
+      envKeys.OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+    }
+  } else {
+    // Direct provider keys (BYOK)
+    const keyMap: Record<string, string | undefined> = {
+      OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+      ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
+      GOOGLE_API_KEY: process.env.GOOGLE_API_KEY,
+      GROQ_API_KEY: process.env.GROQ_API_KEY,
+      XAI_API_KEY: process.env.XAI_API_KEY,
+    };
+    for (const [k, v] of Object.entries(keyMap)) {
+      if (v) envKeys[k] = v;
+    }
+  }
 
-  const envFileContent = llmEnvVars.join("\\n");
+  // Build OpenClaw config matching the documented schema
+  const openclawConfig = {
+    gateway: {
+      port: 18789,
+      auth: {
+        mode: "token" as const,
+        token: gatewayToken,
+      },
+      http: {
+        endpoints: {
+          chatCompletions: { enabled: true },
+        },
+      },
+    },
+    agents: {
+      defaults: {
+        model: {
+          primary: openclawModel,
+        },
+      },
+    },
+    env: envKeys,
+  };
+
+  // JSON.stringify handles escaping for us — no manual quote escaping needed
+  const configJson = JSON.stringify(openclawConfig, null, 2);
 
   return `#cloud-config
 package_update: true
@@ -174,35 +178,13 @@ runcmd:
   # --- Create OpenClaw home directory ---
   - mkdir -p /root/.openclaw
 
-  # --- Write LLM environment variables ---
-  - |
-    cat > /root/.openclaw/.env << 'ENVEOF'
-    ${envFileContent}
-    OPENCLAW_INSTANCE_ID=${instanceId}
-    ENVEOF
-
-  # --- Write OpenClaw config (enable HTTP chat completions endpoint) ---
+  # --- Write OpenClaw config (API keys, gateway auth, model, HTTP endpoint) ---
   - |
     cat > /root/.openclaw/openclaw.json << 'CFGEOF'
-    {
-      "agent": {
-        "model": "${openclawModel}",
-        "name": "${escapedAgentName}"
-      },
-      "gateway": {
-        "auth": {
-          "token": "${gatewayToken}"
-        },
-        "http": {
-          "endpoints": {
-            "chatCompletions": { "enabled": true }
-          }
-        }
-      }
-    }
+${configJson}
     CFGEOF
 
-  # --- Install Caddy for auto-HTTPS reverse proxy ---
+  # --- Install Caddy for reverse proxy ---
   - curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
   - curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list
   - apt-get update
@@ -233,7 +215,6 @@ runcmd:
     Type=simple
     User=root
     Environment=HOME=/root
-    EnvironmentFile=/root/.openclaw/.env
     ExecStart=/usr/bin/openclaw gateway --port 18789
     Restart=always
     RestartSec=5
