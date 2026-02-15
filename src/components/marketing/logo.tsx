@@ -26,7 +26,7 @@ export function LogoMark({ className }: { className?: string }) {
 export function LogoWordmark() {
   return (
     <span className="text-[17px] font-bold tracking-[-0.4px] text-aura-text-white">
-      more<em className="not-italic text-aura-accent">aura</em>
+      More <em className="not-italic text-aura-accent">Aura</em>
     </span>
   );
 }
