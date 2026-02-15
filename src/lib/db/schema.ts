@@ -239,8 +239,43 @@ export const agentInstances = pgTable("agent_instances", {
   tailscaleIp: text("tailscale_ip"),
   region: text("region").default("us-east"),
   error: text("error"),
+  currentStep: text("current_step"),
   startedAt: timestamp("started_at", { withTimezone: true }),
   stoppedAt: timestamp("stopped_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});
+
+export const jobStatusEnum = pgEnum("job_status", [
+  "queued",
+  "provisioning",
+  "running",
+  "failed",
+]);
+
+export const provisioningJobs = pgTable("provisioning_jobs", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  agentId: uuid("agent_id")
+    .references(() => agents.id, { onDelete: "cascade" })
+    .notNull(),
+  userId: uuid("user_id")
+    .references(() => users.id, { onDelete: "cascade" })
+    .notNull(),
+  stripeEventId: text("stripe_event_id").unique(),
+  status: jobStatusEnum("status").notNull().default("queued"),
+  region: text("region").notNull().default("us-east"),
+  workflowRunId: text("workflow_run_id"),
+  retryCount: integer("retry_count").notNull().default(0),
+  maxRetries: integer("max_retries").notNull().default(3),
+  error: text("error"),
+  failedStep: text("failed_step"),
+  claimedAt: timestamp("claimed_at", { withTimezone: true }),
+  lastHeartbeatAt: timestamp("last_heartbeat_at", { withTimezone: true }),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
     .notNull(),
@@ -258,6 +293,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   teamMemberships: many(teamMembers, { relationName: "memberUser" }),
   ownedTeamMembers: many(teamMembers, { relationName: "workspaceOwner" }),
   ownedTeamInvites: many(teamInvites),
+  provisioningJobs: many(provisioningJobs),
 }));
 
 export const subscriptionsRelations = relations(subscriptions, ({ one }) => ({
@@ -274,12 +310,24 @@ export const agentsRelations = relations(agents, ({ one, many }) => ({
   }),
   channels: many(channels),
   instances: many(agentInstances),
+  provisioningJobs: many(provisioningJobs),
 }));
 
 export const agentInstancesRelations = relations(agentInstances, ({ one }) => ({
   agent: one(agents, {
     fields: [agentInstances.agentId],
     references: [agents.id],
+  }),
+}));
+
+export const provisioningJobsRelations = relations(provisioningJobs, ({ one }) => ({
+  agent: one(agents, {
+    fields: [provisioningJobs.agentId],
+    references: [agents.id],
+  }),
+  user: one(users, {
+    fields: [provisioningJobs.userId],
+    references: [users.id],
   }),
 }));
 

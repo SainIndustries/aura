@@ -3,6 +3,9 @@ import { agentInstances, agents } from "@/lib/db/schema";
 import { eq, and, desc, ne } from "drizzle-orm";
 import { simulateProvisioning, simulateTermination } from "./simulator";
 import { provisionServer, terminateServer } from "./hetzner";
+import { enqueueProvisioningJob } from "./queue";
+import { triggerProvisioningWorkflow } from "./github-actions";
+import { stopAgent } from "./lifecycle";
 
 const USE_HETZNER = !!process.env.HETZNER_API_TOKEN;
 
@@ -15,6 +18,7 @@ export type ProvisioningStatus = {
   tailscaleIp: string | null;
   region: string | null;
   error: string | null;
+  currentStep: string | null;
   startedAt: Date | null;
   stoppedAt: Date | null;
   createdAt: Date;
@@ -28,9 +32,12 @@ export type ProvisioningStep = {
 };
 
 /**
- * Get the provisioning steps based on current status
+ * Get the provisioning steps based on current status and step
  */
-export function getProvisioningSteps(status: ProvisioningStatus["status"]): ProvisioningStep[] {
+export function getProvisioningSteps(
+  status: ProvisioningStatus["status"],
+  currentStep?: string | null
+): ProvisioningStep[] {
   const steps: ProvisioningStep[] = [
     { id: "queued", label: "Queued", status: "pending" },
     { id: "creating", label: "Creating Server", status: "pending" },
@@ -39,23 +46,46 @@ export function getProvisioningSteps(status: ProvisioningStatus["status"]): Prov
     { id: "running", label: "Running", status: "pending" },
   ];
 
-  const statusToStepIndex: Record<string, number> = {
-    pending: 0,
-    provisioning: 2, // Mid-way through the process
-    running: 4,
-    stopping: 4,
-    stopped: 4,
-    failed: -1,
+  // Map workflow step identifiers to UI step indices (active step)
+  const stepToActiveIndex: Record<string, number> = {
+    vm_created: 2,          // steps 0,1 completed, step 2 active
+    network_configured: 2,  // networking is sub-step of infra setup
+    ansible_started: 3,     // steps 0,1,2 completed, step 3 active
+    ansible_complete: 4,    // steps 0,1,2,3 completed, step 4 active
   };
 
-  const activeIndex = statusToStepIndex[status] ?? 0;
+  // Determine active step index based on status and currentStep
+  let activeIndex: number;
 
-  if (status === "failed") {
-    // Mark last step as error
-    return steps.map((step, i) => ({
-      ...step,
-      status: i < 2 ? "completed" : i === 2 ? "error" : "pending",
-    }));
+  if (status === "pending") {
+    activeIndex = 0; // Queued is active
+  } else if (status === "provisioning") {
+    if (currentStep && stepToActiveIndex[currentStep] !== undefined) {
+      // Use real step data
+      activeIndex = stepToActiveIndex[currentStep];
+    } else {
+      // Backward compatible: assume step 1 active (Creating Server)
+      activeIndex = 1;
+    }
+  } else if (status === "running" || status === "stopping" || status === "stopped") {
+    activeIndex = 5; // All steps completed (activeIndex > last step index)
+  } else if (status === "failed") {
+    if (currentStep && stepToActiveIndex[currentStep] !== undefined) {
+      // Mark the step where failure occurred as error
+      const errorIndex = stepToActiveIndex[currentStep];
+      return steps.map((step, i) => ({
+        ...step,
+        status: i < errorIndex ? "completed" : i === errorIndex ? "error" : "pending",
+      }));
+    } else {
+      // Fallback: error at step 2 (Installing Dependencies)
+      return steps.map((step, i) => ({
+        ...step,
+        status: i < 2 ? "completed" : i === 2 ? "error" : "pending",
+      }));
+    }
+  } else {
+    activeIndex = 0;
   }
 
   return steps.map((step, i) => ({
@@ -65,9 +95,9 @@ export function getProvisioningSteps(status: ProvisioningStatus["status"]): Prov
 }
 
 /**
- * Queue an agent for provisioning
+ * Queue an agent for provisioning via real infrastructure pipeline
  */
-export async function queueAgentProvisioning(agentId: string, region: string = "us-east"): Promise<ProvisioningStatus> {
+export async function queueAgentProvisioning(agentId: string, region: string = "us-east", userId?: string): Promise<ProvisioningStatus> {
   // Check if agent exists
   const agent = await db.query.agents.findFirst({
     where: eq(agents.id, agentId),
@@ -76,6 +106,8 @@ export async function queueAgentProvisioning(agentId: string, region: string = "
   if (!agent) {
     throw new Error("Agent not found");
   }
+
+  const effectiveUserId = userId || agent.userId;
 
   // Check if there's already an active instance
   const existingInstance = await db.query.agentInstances.findFirst({
@@ -102,17 +134,34 @@ export async function queueAgentProvisioning(agentId: string, region: string = "
 
   console.log(`[Provisioning] Queued agent ${agentId} for provisioning in region ${region}`);
   console.log(`[Provisioning] Instance ${instance.id} created with status: pending`);
-  console.log(`[Provisioning] Using ${USE_HETZNER ? "Hetzner Cloud" : "simulator"}`);
+  console.log(`[Provisioning] Using ${USE_HETZNER ? "Hetzner Cloud" : "pipeline/simulator"}`);
 
   // Start provisioning (non-blocking)
   if (USE_HETZNER) {
+    // Direct Hetzner provisioning — fastest path
     provisionServer(instance.id).catch((err) => {
       console.error(`[Provisioning] Hetzner error for instance ${instance.id}:`, err);
     });
   } else {
-    simulateProvisioning(instance.id).catch((err) => {
-      console.error(`[Provisioning] Simulation error for instance ${instance.id}:`, err);
-    });
+    // Fall back to GitHub Actions pipeline or simulator
+    try {
+      const job = await enqueueProvisioningJob({
+        agentId,
+        userId: effectiveUserId,
+        stripeEventId: `manual-${instance.id}`,
+        region,
+      });
+
+      console.log(`[Provisioning] Job ${job.id} enqueued, triggering workflow...`);
+
+      await triggerProvisioningWorkflow(job);
+    } catch (err) {
+      console.error(`[Provisioning] Failed to trigger pipeline for instance ${instance.id}:`, err);
+      // Fall back to simulator in dev
+      simulateProvisioning(instance.id).catch((simErr) => {
+        console.error(`[Provisioning] Simulation error for instance ${instance.id}:`, simErr);
+      });
+    }
   }
 
   return instance as ProvisioningStatus;
@@ -174,8 +223,8 @@ export async function stopAgentInstance(agentId: string): Promise<ProvisioningSt
       console.error(`[Provisioning] Hetzner termination error for instance ${instance.id}:`, err);
     });
   } else {
-    simulateTermination(instance.id).catch((err) => {
-      console.error(`[Provisioning] Simulation termination error for instance ${instance.id}:`, err);
+    stopAgent(agentId).catch((err) => {
+      console.error(`[Provisioning] Stop error for instance ${instance.id}:`, err);
     });
   }
 
@@ -183,7 +232,7 @@ export async function stopAgentInstance(agentId: string): Promise<ProvisioningSt
 }
 
 /**
- * Update instance status (used by simulator)
+ * Update instance status (used by simulator and hetzner provisioner)
  */
 export async function updateInstanceStatus(
   instanceId: string,

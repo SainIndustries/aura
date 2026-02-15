@@ -169,8 +169,12 @@ export default async function AgentDetailPage({
         </CardContent>
       </Card>
 
-      {/* Deployment Status */}
-      <ProvisioningStatus agentId={agent.id} />
+      {/* Post-Payment Flow & Deployment Status */}
+      <AgentDetailClient 
+        agentId={agent.id} 
+        hasIntegrations={userIntegrations.length > 0}
+        hasChannels={agentChannels.length > 0}
+      />
 
       <div className="grid gap-6 md:grid-cols-2">
         {/* Configuration Summary */}
@@ -384,4 +388,4 @@ function DeleteAgentButton({ agentId }: { agentId: string }) {
 }
 
 import { DeleteAgentButtonClient } from "@/components/dashboard/delete-agent-button-client";
-import { ProvisioningStatus } from "@/components/dashboard/provisioning-status";
+import { AgentDetailClient } from "@/components/dashboard/agent-detail-client";

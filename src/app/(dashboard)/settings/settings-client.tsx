@@ -64,10 +64,10 @@ export function SettingsClient({ email, userId, subscription }: SettingsClientPr
                 </Badge>
               </div>
               <p className="text-sm text-aura-text-dim">
-                Aura Pro — $299/month with a 14-day free trial. No charge today.
+                Aura Pro — $299/month. Deploy and manage AI agents on dedicated infrastructure.
               </p>
-              <form action={createCheckoutSession}>
-                <Button type="submit">Start Free Trial</Button>
+              <form action={() => createCheckoutSession()}>
+                <Button type="submit">Subscribe</Button>
               </form>
             </>
           ) : subscription.isTrialing ? (
@@ -141,7 +141,7 @@ export function SettingsClient({ email, userId, subscription }: SettingsClientPr
               <p className="text-sm text-aura-text-dim">
                 Your subscription has been canceled. Re-subscribe to continue using Aura.
               </p>
-              <form action={createCheckoutSession}>
+              <form action={() => createCheckoutSession()}>
                 <Button type="submit">Re-subscribe</Button>
               </form>
             </>

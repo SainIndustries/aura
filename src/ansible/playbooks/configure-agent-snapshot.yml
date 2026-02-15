@@ -1,0 +1,208 @@
+---
+# Lightweight Ansible playbook for snapshot-based provisioning
+# 
+# The snapshot already has:
+# - Docker CE + Docker Compose
+# - Node.js 20.x
+# - Tailscale (enrolled via cloud-init)
+# - fail2ban (configured and enabled)
+# - UFW firewall (configured and enabled)
+# - openclaw user with /opt/openclaw structure
+#
+# This playbook only configures agent-specific settings:
+# - Agent environment file
+# - Systemd service
+# - Service startup
+# - Final verification
+
+- name: Configure OpenClaw Agent (Snapshot Mode)
+  hosts: all
+  become: yes
+  gather_facts: no
+
+  handlers:
+    - name: reload systemd
+      ansible.builtin.systemd:
+        daemon_reload: yes
+
+  tasks:
+    # Stage 1: Wait for SSH connection
+    - name: Wait for system to be reachable via SSH
+      ansible.builtin.wait_for_connection:
+        delay: 5
+        timeout: 120
+        sleep: 3
+
+    # Stage 2: Wait for cloud-init completion
+    - name: Wait for cloud-init to complete
+      community.general.cloud_init_data_facts:
+      register: cloud_init_status
+      until: >
+        cloud_init_status.cloud_init_data_facts is defined and
+        cloud_init_status.cloud_init_data_facts.status.v1.stage is defined and
+        (cloud_init_status.cloud_init_data_facts.status.v1.stage is none or
+         cloud_init_status.cloud_init_data_facts.status.v1.stage == '')
+      retries: 30
+      delay: 5
+
+    # Stage 3: Gather minimal facts
+    - name: Gather system facts
+      ansible.builtin.setup:
+        gather_subset:
+          - min
+
+    # Stage 4: Verify Tailscale is running
+    - name: Verify Tailscale is running
+      ansible.builtin.command: tailscale status
+      register: tailscale_status_result
+      changed_when: false
+      failed_when: tailscale_status_result.rc != 0
+
+    # Stage 5: Verify pre-installed components (quick sanity check)
+    - name: Verify Docker is available
+      ansible.builtin.command: docker --version
+      register: docker_check
+      changed_when: false
+      failed_when: docker_check.rc != 0
+
+    - name: Verify Node.js is available
+      ansible.builtin.command: node --version
+      register: node_check
+      changed_when: false
+      failed_when: node_check.rc != 0
+
+    - name: Ensure openclaw user exists
+      ansible.builtin.user:
+        name: openclaw
+        system: yes
+        shell: /bin/bash
+        home: /opt/openclaw
+        create_home: no
+      register: openclaw_user
+
+    - name: Ensure /opt/openclaw directory structure exists
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: openclaw
+        group: openclaw
+        mode: '0755'
+      loop:
+        - /opt/openclaw
+        - /opt/openclaw/config
+        - /opt/openclaw/agent
+
+    # Stage 6: Create agent environment file
+    - name: Create agent environment file
+      ansible.builtin.copy:
+        content: |
+          AGENT_ID={{ agent_id }}
+          SERVER_NAME={{ server_name }}
+          SERVER_ID={{ server_id }}
+          API_URL={{ api_url | default('https://aura.openclaw.ai') }}
+          NODE_ENV=production
+        dest: /opt/openclaw/config/agent.env
+        owner: openclaw
+        group: openclaw
+        mode: '0600'
+
+    # Stage 7: Create provisioning marker
+    - name: Create provisioning marker file
+      ansible.builtin.copy:
+        content: |
+          provisioned_at: {{ ansible_date_time.iso8601 | default(lookup('pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ')) }}
+          mode: snapshot-hybrid
+          agent_id: {{ agent_id }}
+          server_name: {{ server_name }}
+          server_id: {{ server_id }}
+        dest: /opt/openclaw/config/provisioned_at
+        owner: openclaw
+        group: openclaw
+        mode: '0644'
+
+    # Stage 8: Ensure systemd service file exists (should be in snapshot)
+    - name: Check if systemd service exists
+      ansible.builtin.stat:
+        path: /etc/systemd/system/openclaw-agent.service
+      register: service_file
+
+    - name: Create systemd service if missing
+      ansible.builtin.copy:
+        content: |
+          [Unit]
+          Description=OpenClaw Agent Service
+          After=network-online.target docker.service
+          Wants=network-online.target
+          Requires=docker.service
+
+          [Service]
+          Type=simple
+          User=openclaw
+          EnvironmentFile=/opt/openclaw/config/agent.env
+          ExecStart=/usr/bin/node /opt/openclaw/agent/index.js
+          Restart=always
+          RestartSec=10
+          StandardOutput=journal
+          StandardError=journal
+          SyslogIdentifier=openclaw-agent
+
+          [Install]
+          WantedBy=multi-user.target
+        dest: /etc/systemd/system/openclaw-agent.service
+        owner: root
+        group: root
+        mode: '0644'
+      when: not service_file.stat.exists
+      notify: reload systemd
+
+    # Stage 9: Reload systemd and enable service
+    - name: Reload systemd daemon
+      ansible.builtin.systemd:
+        daemon_reload: yes
+
+    - name: Enable openclaw-agent service
+      ansible.builtin.systemd_service:
+        name: openclaw-agent
+        enabled: yes
+
+    # Stage 10: Start agent service (may fail if agent code not deployed yet)
+    - name: Start openclaw-agent service
+      ansible.builtin.systemd_service:
+        name: openclaw-agent
+        state: started
+      register: agent_service_result
+      failed_when: false
+
+    # Stage 11: Final verification
+    - name: Get Tailscale IP
+      ansible.builtin.command: tailscale ip -4
+      register: tailscale_ip
+      changed_when: false
+
+    - name: Get Docker version
+      ansible.builtin.command: docker --version
+      register: docker_version
+      changed_when: false
+
+    - name: Get Node.js version
+      ansible.builtin.command: node --version
+      register: node_version
+      changed_when: false
+
+    - name: Check agent service status
+      ansible.builtin.systemd_service:
+        name: openclaw-agent
+      register: agent_status
+
+    - name: Display configuration summary
+      ansible.builtin.debug:
+        msg:
+          - "=== Snapshot-Mode Configuration Complete ==="
+          - "Agent ID: {{ agent_id }}"
+          - "Server: {{ server_name }} ({{ server_id }})"
+          - "Tailscale IP: {{ tailscale_ip.stdout }}"
+          - "Docker: {{ docker_version.stdout }}"
+          - "Node.js: {{ node_version.stdout }}"
+          - "Agent service enabled: {{ agent_status.status.UnitFileState | default('unknown') }}"
+          - "Agent service status: {{ agent_status.status.ActiveState | default('pending deployment') }}"
+          - "============================================="

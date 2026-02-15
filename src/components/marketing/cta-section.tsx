@@ -43,15 +43,15 @@ export function CtaSection() {
           </span>
         </h2>
         <p className="mb-10 text-[17px] leading-[1.7] text-aura-text-light">
-          Aura is in early access for operators who move fast and need an AI that
-          keeps up. Request access and see what more looks like.
+          Start your 7-day free trial today. No credit card required to explore.
+          Then just $199/month to deploy unlimited AI agents.
         </p>
         <div className="flex flex-wrap justify-center gap-[14px]">
           <a
-            href={CAL_LINK}
+            href="/sign-in"
             className="group inline-flex items-center gap-2 rounded-[10px] bg-aura-accent px-[34px] py-[15px] text-[15px] font-semibold text-white transition-all duration-[250ms] hover:-translate-y-0.5 hover:bg-aura-accent-bright hover:shadow-[0_8px_36px_rgba(79,143,255,0.25)]"
           >
-            Request Early Access
+            Start Free Trial
             <svg
               width="15"
               height="15"
@@ -78,17 +78,26 @@ export function CtaSection() {
 
         {/* Social proof */}
         <div className="mt-12 flex flex-wrap items-center justify-center gap-6">
-          <div className="flex -space-x-2">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <div
-                key={i}
-                className="h-8 w-8 rounded-full border-2 border-aura-void bg-gradient-to-br from-aura-accent/30 to-aura-purple/30"
-              />
-            ))}
+          <div className="flex items-center gap-2 text-sm text-aura-text-dim">
+            <svg className="h-5 w-5 text-aura-mint" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>7-day free trial</span>
           </div>
-          <p className="text-sm text-aura-text-dim">
-            Join <span className="font-medium text-aura-text-light">200+</span> teams already on the waitlist
-          </p>
+          <div className="h-4 w-px bg-aura-border" />
+          <div className="flex items-center gap-2 text-sm text-aura-text-dim">
+            <svg className="h-5 w-5 text-aura-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>Cancel anytime</span>
+          </div>
+          <div className="h-4 w-px bg-aura-border" />
+          <div className="flex items-center gap-2 text-sm text-aura-text-dim">
+            <svg className="h-5 w-5 text-aura-purple" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>$199/month after trial</span>
+          </div>
         </div>
       </div>
     </section>

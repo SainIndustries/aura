@@ -8,7 +8,7 @@ import { users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { TOKEN_PACKAGES, type TokenPackageId } from "@/lib/billing/token-packages";
 
-export async function createCheckoutSession() {
+export async function createCheckoutSession(agentId?: string) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
 
@@ -28,6 +28,13 @@ export async function createCheckoutSession() {
       .where(eq(users.id, user.id));
   }
 
+  const successUrl = agentId
+    ? `${process.env.NEXT_PUBLIC_APP_URL}/agents/${agentId}?success=true`
+    : `${process.env.NEXT_PUBLIC_APP_URL}/settings?success=true`;
+  const cancelUrl = agentId
+    ? `${process.env.NEXT_PUBLIC_APP_URL}/agents/${agentId}?canceled=true`
+    : `${process.env.NEXT_PUBLIC_APP_URL}/settings?canceled=true`;
+
   const session = await stripe.checkout.sessions.create({
     customer: customerId,
     mode: "subscription",
@@ -38,10 +45,11 @@ export async function createCheckoutSession() {
       },
     ],
     subscription_data: {
-      trial_period_days: 14,
+      trial_period_days: 7,
     },
-    success_url: `${process.env.NEXT_PUBLIC_APP_URL}/settings?success=true`,
-    cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/settings?canceled=true`,
+    metadata: agentId ? { agentId, userId: user.id } : undefined,
+    success_url: successUrl,
+    cancel_url: cancelUrl,
   });
 
   if (session.url) {

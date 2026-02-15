@@ -9,7 +9,7 @@ import { SolutionsByTeamSection } from "@/components/marketing/solutions-by-team
 import { IntegrationsSection } from "@/components/marketing/integrations-section";
 import { HowItWorksSection } from "@/components/marketing/how-it-works-section";
 import { TrustSection } from "@/components/marketing/trust-section";
-import { WaitlistSection } from "@/components/marketing/waitlist-section";
+import { PricingSection } from "@/components/marketing/pricing-section";
 import { Footer } from "@/components/marketing/footer";
 
 export default function HomePage() {
@@ -26,7 +26,7 @@ export default function HomePage() {
       <IntegrationsSection />
       <HowItWorksSection />
       <TrustSection />
-      <WaitlistSection />
+      <PricingSection />
       <Footer />
     </>
   );

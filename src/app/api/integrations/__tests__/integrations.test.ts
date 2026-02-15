@@ -139,7 +139,7 @@ describe('Integrations API Routes', () => {
       vi.mocked(getCurrentUser).mockResolvedValue(mockUser as any)
 
       const { db } = await import('@/lib/db')
-      vi.mocked(db.query.integrations.findFirst).mockResolvedValue(null)
+      vi.mocked(db.query.integrations.findFirst).mockResolvedValue(undefined)
 
       const newIntegration = createMockIntegration({
         provider: 'github',
@@ -246,7 +246,7 @@ describe('Integrations API Routes', () => {
       vi.mocked(getCurrentUser).mockResolvedValue(mockUser as any)
 
       const { db } = await import('@/lib/db')
-      vi.mocked(db.query.integrations.findFirst).mockResolvedValue(null)
+      vi.mocked(db.query.integrations.findFirst).mockResolvedValue(undefined)
 
       const { DELETE } = await import('@/app/api/integrations/route')
       

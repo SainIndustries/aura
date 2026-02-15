@@ -1,0 +1,338 @@
+name: Build Snapshot
+
+on:
+  # Manual trigger only - no automatic rebuilds to avoid disrupting customer agents
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Reason for rebuild'
+        required: false
+        default: 'Manual rebuild'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    
+    # Require environment approval for production snapshots
+    environment: production
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SNAPSHOT_SSH_PRIVATE_KEY }}" > ~/.ssh/snapshot_key
+          chmod 600 ~/.ssh/snapshot_key
+          
+          # Verify key was written correctly
+          if [[ ! -s ~/.ssh/snapshot_key ]]; then
+            echo "ERROR: SSH key is empty. Check SNAPSHOT_SSH_PRIVATE_KEY secret."
+            exit 1
+          fi
+
+      - name: Create VM and Build Snapshot
+        env:
+          HETZNER_API_TOKEN: ${{ secrets.HETZNER_API_TOKEN }}
+          HETZNER_SSH_KEY_NAME: "aura-snapshot-builder-ci"
+        run: |
+          set -euo pipefail
+          
+          # Get SSH key ID by name (not just first key)
+          SSH_KEY_ID=$(curl -s -H "Authorization: Bearer $HETZNER_API_TOKEN" \
+            "https://api.hetzner.cloud/v1/ssh_keys" | \
+            jq -r ".ssh_keys[] | select(.name == \"$HETZNER_SSH_KEY_NAME\") | .id")
+          
+          if [[ -z "$SSH_KEY_ID" || "$SSH_KEY_ID" == "null" ]]; then
+            echo "ERROR: SSH key '$HETZNER_SSH_KEY_NAME' not found in Hetzner"
+            exit 1
+          fi
+          echo "Using SSH Key: $HETZNER_SSH_KEY_NAME (ID: $SSH_KEY_ID)"
+          
+          # Create server with timestamp for uniqueness
+          SERVER_NAME="snapshot-builder-$(date +%Y%m%d-%H%M%S)"
+          echo "Creating server: $SERVER_NAME"
+          
+          CREATE_RESP=$(curl -s -X POST \
+            -H "Authorization: Bearer $HETZNER_API_TOKEN" \
+            -H "Content-Type: application/json" \
+            "https://api.hetzner.cloud/v1/servers" \
+            -d "{
+              \"name\": \"$SERVER_NAME\",
+              \"server_type\": \"cpx11\",
+              \"image\": \"ubuntu-24.04\",
+              \"location\": \"ash\",
+              \"ssh_keys\": [$SSH_KEY_ID],
+              \"start_after_create\": true,
+              \"labels\": {
+                \"purpose\": \"snapshot-builder\",
+                \"ephemeral\": \"true\"
+              }
+            }")
+          
+          SERVER_ID=$(echo "$CREATE_RESP" | jq -r '.server.id')
+          SERVER_IP=$(echo "$CREATE_RESP" | jq -r '.server.public_net.ipv4.ip')
+          
+          if [[ "$SERVER_ID" == "null" || -z "$SERVER_ID" ]]; then
+            echo "Failed to create server:"
+            echo "$CREATE_RESP" | jq .
+            exit 1
+          fi
+          
+          echo "Server created: ID=$SERVER_ID, IP=$SERVER_IP"
+          
+          # Cleanup function
+          cleanup() {
+            echo "Cleaning up server $SERVER_ID..."
+            curl -s -X DELETE \
+              -H "Authorization: Bearer $HETZNER_API_TOKEN" \
+              "https://api.hetzner.cloud/v1/servers/$SERVER_ID" || true
+          }
+          trap cleanup EXIT
+          
+          # Wait for SSH with retries
+          echo "Waiting for SSH to be available..."
+          for i in {1..30}; do
+            if ssh -o StrictHostKeyChecking=accept-new \
+                   -o ConnectTimeout=10 \
+                   -o BatchMode=yes \
+                   -i ~/.ssh/snapshot_key \
+                   root@$SERVER_IP "echo 'SSH ready'" 2>/dev/null; then
+              echo "SSH connection established"
+              break
+            fi
+            echo "Attempt $i/30 - waiting..."
+            sleep 10
+          done
+          
+          # Configure server - NO SECRETS BAKED IN
+          echo "Configuring server (no secrets - base image only)..."
+          ssh -o StrictHostKeyChecking=accept-new \
+              -o BatchMode=yes \
+              -i ~/.ssh/snapshot_key \
+              root@$SERVER_IP << 'ENDSSH'
+          set -ex
+          
+          # Update and install base packages
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update
+          apt-get upgrade -y
+          apt-get install -y \
+            apt-transport-https \
+            ca-certificates \
+            curl \
+            gnupg \
+            lsb-release \
+            jq \
+            fail2ban \
+            ufw \
+            unattended-upgrades
+          
+          # Install Docker
+          curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+          echo "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu noble stable" > /etc/apt/sources.list.d/docker.list
+          apt-get update
+          apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+          systemctl enable docker
+          
+          # Install Node.js 20 LTS
+          curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+          apt-get install -y nodejs
+          
+          # Install Tailscale (for secure networking)
+          curl -fsSL https://tailscale.com/install.sh | sh
+          
+          # Create application user (unprivileged)
+          useradd --system --shell /usr/sbin/nologin --home-dir /opt/aura --create-home aura
+          usermod -aG docker aura
+          
+          # Create directory structure with proper permissions
+          mkdir -p /opt/aura/{config,app,logs,data}
+          chown -R aura:aura /opt/aura
+          chmod 750 /opt/aura
+          chmod 700 /opt/aura/config  # Secrets go here at runtime
+          
+          # Create systemd service template (reads secrets from env file at runtime)
+          cat > /etc/systemd/system/aura-agent.service << 'SVCEOF'
+          [Unit]
+          Description=Aura Agent Service
+          After=network-online.target docker.service
+          Wants=network-online.target
+          Requires=docker.service
+          
+          [Service]
+          Type=simple
+          User=aura
+          WorkingDirectory=/opt/aura/app
+          # SECRETS INJECTED AT RUNTIME via this env file
+          EnvironmentFile=/opt/aura/config/agent.env
+          ExecStart=/usr/bin/node /opt/aura/app/index.js
+          Restart=always
+          RestartSec=10
+          StandardOutput=journal
+          StandardError=journal
+          SyslogIdentifier=aura-agent
+          
+          # Security hardening
+          NoNewPrivileges=yes
+          ProtectSystem=strict
+          ProtectHome=yes
+          ReadWritePaths=/opt/aura/data /opt/aura/logs
+          PrivateTmp=yes
+          
+          [Install]
+          WantedBy=multi-user.target
+          SVCEOF
+          
+          systemctl daemon-reload
+          
+          # Configure UFW firewall
+          ufw default deny incoming
+          ufw default allow outgoing
+          ufw allow 22/tcp comment 'SSH'
+          ufw allow 41641/udp comment 'Tailscale'
+          echo 'y' | ufw enable
+          
+          # Configure fail2ban
+          cat > /etc/fail2ban/jail.local << 'F2BEOF'
+          [DEFAULT]
+          bantime = 1h
+          findtime = 10m
+          maxretry = 5
+          
+          [sshd]
+          enabled = true
+          port = ssh
+          filter = sshd
+          logpath = /var/log/auth.log
+          maxretry = 3
+          bantime = 24h
+          F2BEOF
+          
+          systemctl enable fail2ban
+          systemctl restart fail2ban
+          
+          # Enable automatic security updates
+          cat > /etc/apt/apt.conf.d/20auto-upgrades << 'UPGEOF'
+          APT::Periodic::Update-Package-Lists "1";
+          APT::Periodic::Unattended-Upgrade "1";
+          APT::Periodic::AutocleanInterval "7";
+          UPGEOF
+          
+          # Cleanup for minimal snapshot
+          apt-get clean
+          apt-get autoremove -y
+          rm -rf /var/lib/apt/lists/*
+          rm -rf /tmp/* /var/tmp/*
+          truncate -s 0 /var/log/*.log || true
+          truncate -s 0 /var/log/**/*.log 2>/dev/null || true
+          
+          # Clear sensitive data
+          history -c
+          rm -f /root/.bash_history
+          rm -f /home/*/.bash_history 2>/dev/null || true
+          
+          # Remove SSH host keys (regenerated on first boot)
+          rm -f /etc/ssh/ssh_host_*
+          
+          echo "=== BASE IMAGE CONFIGURED ==="
+          echo "NO SECRETS BAKED IN"
+          echo "Secrets injected at runtime via /opt/aura/config/agent.env"
+          ENDSSH
+          
+          # Power off gracefully
+          echo "Powering off server for snapshot..."
+          curl -s -X POST \
+            -H "Authorization: Bearer $HETZNER_API_TOKEN" \
+            "https://api.hetzner.cloud/v1/servers/$SERVER_ID/actions/shutdown"
+          
+          # Wait for power off
+          for i in {1..30}; do
+            STATUS=$(curl -s -H "Authorization: Bearer $HETZNER_API_TOKEN" \
+              "https://api.hetzner.cloud/v1/servers/$SERVER_ID" | jq -r '.server.status')
+            if [[ "$STATUS" == "off" ]]; then
+              echo "Server powered off"
+              break
+            fi
+            echo "Waiting for power off... (status: $STATUS)"
+            sleep 5
+          done
+          
+          # Create snapshot
+          SNAPSHOT_DATE=$(date +%Y%m%d)
+          SNAPSHOT_NAME="aura-base-$SNAPSHOT_DATE"
+          echo "Creating snapshot: $SNAPSHOT_NAME"
+          
+          SNAP_RESP=$(curl -s -X POST \
+            -H "Authorization: Bearer $HETZNER_API_TOKEN" \
+            -H "Content-Type: application/json" \
+            "https://api.hetzner.cloud/v1/servers/$SERVER_ID/actions/create_image" \
+            -d "{
+              \"description\": \"$SNAPSHOT_NAME - Ubuntu 24.04 with Docker, Node.js 20, security hardening\",
+              \"type\": \"snapshot\",
+              \"labels\": {
+                \"name\": \"$SNAPSHOT_NAME\",
+                \"purpose\": \"aura-agent-base\",
+                \"created\": \"$SNAPSHOT_DATE\",
+                \"no-secrets\": \"true\"
+              }
+            }")
+          
+          SNAPSHOT_ID=$(echo "$SNAP_RESP" | jq -r '.image.id')
+          ACTION_ID=$(echo "$SNAP_RESP" | jq -r '.action.id')
+          
+          if [[ "$SNAPSHOT_ID" == "null" || -z "$SNAPSHOT_ID" ]]; then
+            echo "Failed to create snapshot:"
+            echo "$SNAP_RESP" | jq .
+            exit 1
+          fi
+          
+          echo "Snapshot creation started: ID=$SNAPSHOT_ID"
+          
+          # Wait for snapshot to complete
+          for i in {1..60}; do
+            STATUS=$(curl -s -H "Authorization: Bearer $HETZNER_API_TOKEN" \
+              "https://api.hetzner.cloud/v1/actions/$ACTION_ID" | jq -r '.action.status')
+            if [[ "$STATUS" == "success" ]]; then
+              echo "Snapshot completed"
+              break
+            elif [[ "$STATUS" == "error" ]]; then
+              echo "Snapshot failed"
+              exit 1
+            fi
+            echo "Waiting for snapshot... (status: $STATUS)"
+            sleep 10
+          done
+          
+          # Disable cleanup trap - we'll delete explicitly
+          trap - EXIT
+          
+          # Delete temporary server
+          echo "Deleting temporary server..."
+          curl -s -X DELETE \
+            -H "Authorization: Bearer $HETZNER_API_TOKEN" \
+            "https://api.hetzner.cloud/v1/servers/$SERVER_ID"
+          
+          echo ""
+          echo "========================================"
+          echo "✅ SNAPSHOT CREATED SUCCESSFULLY"
+          echo "========================================"
+          echo ""
+          echo "Snapshot ID: $SNAPSHOT_ID"
+          echo "Snapshot Name: $SNAPSHOT_NAME"
+          echo ""
+          echo "Security:"
+          echo "  ✓ No secrets baked in"
+          echo "  ✓ Secrets injected at runtime via /opt/aura/config/agent.env"
+          echo "  ✓ fail2ban enabled"
+          echo "  ✓ UFW firewall configured"
+          echo "  ✓ Automatic security updates enabled"
+          echo "  ✓ SSH host keys removed (regenerated on boot)"
+          echo ""
+          echo "Update HETZNER_SNAPSHOT_ID secret to: $SNAPSHOT_ID"
+          
+          # Output for GitHub Actions
+          echo "snapshot_id=$SNAPSHOT_ID" >> $GITHUB_OUTPUT
+          echo "snapshot_name=$SNAPSHOT_NAME" >> $GITHUB_OUTPUT

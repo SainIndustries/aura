@@ -76,7 +76,7 @@ describe('Agent Provisioning API Routes', () => {
       vi.mocked(getCurrentUser).mockResolvedValue(mockUser as any)
 
       const { db } = await import('@/lib/db')
-      vi.mocked(db.query.agents.findFirst).mockResolvedValue(null)
+      vi.mocked(db.query.agents.findFirst).mockResolvedValue(undefined)
 
       const { POST } = await import('@/app/api/agents/[id]/provision/route')
       

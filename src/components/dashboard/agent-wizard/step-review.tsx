@@ -161,6 +161,26 @@ export function StepReview({
         </CardContent>
       </Card>
 
+      {/* Pricing Info */}
+      <Card className="border-aura-mint/20 bg-aura-mint/5">
+        <CardContent className="pt-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-aura-text-white">
+                7-day free trial, then $199/month
+              </p>
+              <p className="text-xs text-aura-text-dim mt-1">
+                Cancel anytime. Deploy unlimited agents.
+              </p>
+            </div>
+            <div className="text-right">
+              <span className="text-2xl font-bold text-aura-text-white">$0</span>
+              <span className="text-aura-text-dim text-sm"> today</span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Actions */}
       <div className="flex justify-between pt-4">
         <Button type="button" variant="ghost" onClick={onBack}>
@@ -180,7 +200,7 @@ export function StepReview({
           ) : (
             <>
               <Rocket className="mr-2 h-4 w-4" />
-              Create Agent
+              Continue to Payment
             </>
           )}
         </Button>

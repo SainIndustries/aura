@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
 import {
   Server,
   Play,
@@ -95,6 +96,7 @@ export function ProvisioningStatus({ agentId }: ProvisioningStatusProps) {
   const [deploying, setDeploying] = useState(false);
   const [stopping, setStopping] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorCode, setErrorCode] = useState<string | null>(null);
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -155,6 +157,7 @@ export function ProvisioningStatus({ agentId }: ProvisioningStatusProps) {
         setSteps(data.steps);
       } else {
         setError(data.error || "Failed to deploy agent");
+        setErrorCode(data.errorCode || null);
       }
     } catch (err) {
       console.error("Error deploying:", err);
@@ -236,7 +239,14 @@ export function ProvisioningStatus({ agentId }: ProvisioningStatusProps) {
           )}
 
           {error && (
-            <p className="text-sm text-destructive">{error}</p>
+            <div className="space-y-2">
+              <p className="text-sm text-destructive">{error}</p>
+              {errorCode === "NO_ACTIVE_SUBSCRIPTION" && (
+                <Button variant="outline" size="sm" asChild>
+                  <Link href="/settings">Go to Settings</Link>
+                </Button>
+              )}
+            </div>
           )}
 
           <Button
@@ -286,10 +296,47 @@ export function ProvisioningStatus({ agentId }: ProvisioningStatusProps) {
       <CardContent className="space-y-6">
         {/* Progress Steps */}
         {(instance.status === "pending" || instance.status === "provisioning") && steps && (
-          <div className="space-y-2">
-            {steps.map((step) => (
-              <StepIndicator key={step.id} step={step} />
-            ))}
+          <div className="space-y-4">
+            {/* Progress Bar */}
+            <div className="space-y-2">
+              <div className="flex justify-between text-xs text-aura-text-dim">
+                <span>Progress</span>
+                <span>
+                  {(() => {
+                    const completedSteps = steps.filter(s => s.status === "completed").length;
+                    const activeStep = steps.findIndex(s => s.status === "active");
+                    const totalSteps = steps.length;
+                    const stepTimes = [30, 90, 120, 180, 30]; // seconds per step
+                    const completedTime = stepTimes.slice(0, completedSteps).reduce((a, b) => a + b, 0);
+                    const remainingTime = stepTimes.slice(completedSteps).reduce((a, b) => a + b, 0);
+                    const mins = Math.ceil(remainingTime / 60);
+                    return `~${mins} min remaining`;
+                  })()}
+                </span>
+              </div>
+              <div className="h-2 bg-aura-surface-raised rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-gradient-to-r from-aura-accent to-aura-mint transition-all duration-500 ease-out"
+                  style={{ 
+                    width: `${Math.max(5, (steps.filter(s => s.status === "completed").length / steps.length) * 100)}%` 
+                  }}
+                />
+              </div>
+            </div>
+            
+            {/* Steps */}
+            <div className="space-y-2">
+              {steps.map((step, i) => (
+                <div key={step.id} className="flex items-center justify-between">
+                  <StepIndicator step={step} />
+                  <span className="text-xs text-aura-text-dim">
+                    {step.status === "completed" ? "✓" : 
+                     step.status === "active" ? "in progress..." :
+                     ["~30s", "~1.5m", "~2m", "~3m", "~30s"][i]}
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 

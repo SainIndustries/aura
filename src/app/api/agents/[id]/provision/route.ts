@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { agents } from "@/lib/db/schema";
 import { getCurrentUser } from "@/lib/auth/current-user";
+import { getUserSubscription } from "@/lib/subscription";
 import {
   queueAgentProvisioning,
   getProvisioningStatus,
@@ -30,6 +31,18 @@ export async function POST(
       return NextResponse.json({ error: "Agent not found" }, { status: 404 });
     }
 
+    // Check for active subscription (subscription gates provisioning)
+    const subscription = await getUserSubscription(user.id);
+    if (!subscription || !subscription.isActive) {
+      return NextResponse.json(
+        {
+          error: "Active subscription required to deploy agents. Please subscribe in Settings.",
+          errorCode: "NO_ACTIVE_SUBSCRIPTION"
+        },
+        { status: 403 }
+      );
+    }
+
     // Parse optional region from request body
     let region = "us-east";
     try {
@@ -41,8 +54,8 @@ export async function POST(
       // No body provided, use default region
     }
 
-    // Queue the agent for provisioning
-    const instance = await queueAgentProvisioning(id, region);
+    // Queue the agent for provisioning via real infrastructure pipeline
+    const instance = await queueAgentProvisioning(id, region, user.id);
     const steps = getProvisioningSteps(instance.status);
 
     return NextResponse.json({

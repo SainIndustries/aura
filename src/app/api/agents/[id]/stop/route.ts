@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { agents, auditLogs } from "@/lib/db/schema";
+import { agents, auditLogs, agentInstances } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth/current-user";
+import { stopAgent } from "@/lib/provisioning/lifecycle";
 
 export async function POST(
   request: NextRequest,
@@ -11,7 +12,7 @@ export async function POST(
   try {
     const { id } = await params;
     const user = await getCurrentUser();
-    
+
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -24,18 +25,42 @@ export async function POST(
       return NextResponse.json({ error: "Agent not found" }, { status: 404 });
     }
 
-    if (agent.status === "paused") {
+    if (agent.status !== "active") {
       return NextResponse.json(
-        { error: "Agent is already paused" },
+        { error: "Agent is not running" },
         { status: 400 }
       );
     }
 
-    // Update agent status to paused
-    await db
-      .update(agents)
-      .set({ status: "paused", updatedAt: new Date() })
-      .where(eq(agents.id, id));
+    // Check if agent has a running instance with serverId
+    const instance = await db.query.agentInstances.findFirst({
+      where: and(
+        eq(agentInstances.agentId, id),
+        eq(agentInstances.status, "running")
+      ),
+    });
+
+    if (instance && instance.serverId) {
+      // Real infrastructure: call lifecycle orchestrator
+      try {
+        await stopAgent(id);
+      } catch (error) {
+        console.error("Failed to stop agent:", error);
+        return NextResponse.json(
+          {
+            error: "Failed to stop agent",
+            details: error instanceof Error ? error.message : "Unknown error"
+          },
+          { status: 500 }
+        );
+      }
+    } else {
+      // Legacy/simulated agent: just update status in DB
+      await db
+        .update(agents)
+        .set({ status: "paused", updatedAt: new Date() })
+        .where(eq(agents.id, id));
+    }
 
     // Log the action
     await db.insert(auditLogs).values({
@@ -54,7 +79,7 @@ export async function POST(
     return NextResponse.json({
       success: true,
       message: "Agent stopped successfully",
-      agent: { ...agent, status: "paused" },
+      agent: { ...agent, status: "paused" as const },
     });
   } catch (error) {
     console.error("Stop agent error:", error);
