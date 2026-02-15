@@ -27,7 +27,7 @@ export async function GET() {
 
     const hasRunningInstance = userAgents.some((agent) =>
       (agent.instances ?? []).some(
-        (inst) => inst.status === "running" && inst.serverIp
+        (inst) => inst.status === "running"
       )
     );
 
