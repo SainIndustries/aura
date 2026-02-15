@@ -8,7 +8,7 @@ const footerLinks = {
       { label: "Capabilities", href: "#what" },
       { label: "Integrations", href: "#integrations" },
       { label: "How It Works", href: "#how" },
-      { label: "Security", href: "#" },
+      { label: "Security", href: "/security" },
     ],
   },
   company: {
@@ -25,7 +25,7 @@ const footerLinks = {
     links: [
       { label: "Privacy Policy", href: "/privacy" },
       { label: "Terms of Service", href: "/terms" },
-      { label: "Security", href: "#" },
+      { label: "Security", href: "/security" },
     ],
   },
 };
