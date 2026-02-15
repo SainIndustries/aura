@@ -32,8 +32,10 @@ import {
 import {
   integrationProviders,
   categoryMeta,
+  getProviderById,
   type IntegrationCategory,
 } from "@/lib/integrations/providers";
+import { getCapabilitiesMessage } from "@/lib/integrations/capabilities";
 import {
   Select,
   SelectContent,
@@ -98,7 +100,7 @@ type Message = {
 export default function ChatPage() {
   const { user } = usePrivy();
   const searchParams = useSearchParams();
-  const { hasRunningAgent, agentName, agents, selectedAgentId, setSelectedAgentId, elevenlabsConnected, refresh } = useAgentStatus();
+  const { hasRunningAgent, agentName, agents, selectedAgentId, setSelectedAgentId, elevenlabsConnected, refresh, newlyConnectedIntegration, clearNewIntegration } = useAgentStatus();
   const [statusChecked, setStatusChecked] = useState(false);
 
   // Re-check agent status on mount (provider may have stale data from before provisioning)
@@ -182,6 +184,24 @@ export default function ChatPage() {
       return prev;
     });
   }, [agentName]);
+
+  // Inject capabilities message when a new integration is connected
+  useEffect(() => {
+    if (!newlyConnectedIntegration) return;
+    const provider = getProviderById(newlyConnectedIntegration);
+    const content = getCapabilitiesMessage(newlyConnectedIntegration, provider?.name);
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `integration-${newlyConnectedIntegration}-${Date.now()}`,
+        role: "assistant" as const,
+        content,
+        timestamp: new Date(),
+      },
+    ]);
+    clearNewIntegration();
+  }, [newlyConnectedIntegration, clearNewIntegration]);
+
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [toolStatus, setToolStatus] = useState<string | null>(null);

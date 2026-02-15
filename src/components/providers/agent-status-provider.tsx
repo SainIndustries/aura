@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, useCallback, useMemo } from "react";
+import { createContext, useContext, useEffect, useState, useCallback, useMemo, useRef } from "react";
 
 interface AgentIntegrations {
   google: boolean;
@@ -23,6 +23,8 @@ interface AgentStatusContextType {
   googleAuthorized: boolean;
   elevenlabsConnected: boolean;
   refresh: () => Promise<void>;
+  newlyConnectedIntegration: string | null;
+  clearNewIntegration: () => void;
 }
 
 const AgentStatusContext = createContext<AgentStatusContextType | null>(null);
@@ -33,6 +35,12 @@ export function AgentStatusProvider({ children }: { children: React.ReactNode })
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [googleAuthorized, setGoogleAuthorized] = useState(false);
   const [elevenlabsConnected, setElevenlabsConnected] = useState(false);
+  const [newlyConnectedIntegration, setNewlyConnectedIntegration] = useState<string | null>(null);
+  const connectedProvidersRef = useRef<Set<string> | null>(null);
+
+  const clearNewIntegration = useCallback(() => {
+    setNewlyConnectedIntegration(null);
+  }, []);
 
   const refresh = useCallback(async () => {
     try {
@@ -42,6 +50,20 @@ export function AgentStatusProvider({ children }: { children: React.ReactNode })
         setHasRunningAgent(data.openclaw?.running ?? false);
         setGoogleAuthorized(data.google?.connected ?? false);
         setElevenlabsConnected(data.elevenlabs?.connected ?? false);
+
+        // Detect newly connected integrations
+        const currentProviders = new Set<string>(
+          (data.connectedProviders as string[] | undefined) ?? []
+        );
+        if (connectedProvidersRef.current !== null) {
+          for (const provider of currentProviders) {
+            if (!connectedProvidersRef.current.has(provider)) {
+              setNewlyConnectedIntegration(provider);
+              break; // one at a time
+            }
+          }
+        }
+        connectedProvidersRef.current = currentProviders;
 
         const agentsList: AgentInfo[] = (data.agents ?? []).map((a: Record<string, unknown>) => ({
           id: a.id as string,
@@ -73,8 +95,8 @@ export function AgentStatusProvider({ children }: { children: React.ReactNode })
   }, [agents, selectedAgentId]);
 
   const value = useMemo(
-    () => ({ hasRunningAgent, agentName, agents, selectedAgentId, setSelectedAgentId, googleAuthorized, elevenlabsConnected, refresh }),
-    [hasRunningAgent, agentName, agents, selectedAgentId, googleAuthorized, elevenlabsConnected, refresh]
+    () => ({ hasRunningAgent, agentName, agents, selectedAgentId, setSelectedAgentId, googleAuthorized, elevenlabsConnected, refresh, newlyConnectedIntegration, clearNewIntegration }),
+    [hasRunningAgent, agentName, agents, selectedAgentId, googleAuthorized, elevenlabsConnected, refresh, newlyConnectedIntegration, clearNewIntegration]
   );
 
   return (
@@ -96,6 +118,8 @@ export function useAgentStatus() {
       googleAuthorized: false,
       elevenlabsConnected: false,
       refresh: async () => {},
+      newlyConnectedIntegration: null,
+      clearNewIntegration: () => {},
     };
   }
   return context;

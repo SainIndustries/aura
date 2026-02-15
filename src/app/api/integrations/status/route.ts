@@ -27,6 +27,13 @@ export async function GET() {
       ),
     });
 
+    // Get all connected providers for notification detection
+    const allIntegrations = await db.query.integrations.findMany({
+      where: eq(integrations.userId, user.id),
+      columns: { provider: true },
+    });
+    const connectedProviders = allIntegrations.map((i) => i.provider);
+
     // Check if user has a running OpenClaw instance
     const userAgents = await db.query.agents.findMany({
       where: eq(agents.userId, user.id),
@@ -69,6 +76,7 @@ export async function GET() {
         ...(firstRunning ? { agentName: firstRunning.name } : {}),
       },
       agents: agentsList,
+      connectedProviders,
     });
   } catch (error) {
     console.error("Error fetching integration status:", error);
