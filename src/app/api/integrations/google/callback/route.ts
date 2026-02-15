@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { validateState } from "@/lib/integrations/oauth-state";
 import { encryptToken } from "@/lib/integrations/encryption";
 import { db } from "@/lib/db";
-import { integrations } from "@/lib/db/schema";
+import { agents, integrations } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
@@ -48,14 +48,15 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Validate CSRF state and extract userId
-    const userId = await validateState(state);
-    if (!userId) {
+    // Validate CSRF state and extract userId + agentId
+    const stateData = await validateState(state);
+    if (!stateData) {
       return new Response(
         `<html><body><script>window.close();</script><p>Invalid state. Please try again.</p></body></html>`,
         { headers: { "Content-Type": "text/html" } }
       );
     }
+    const { userId, agentId } = stateData;
 
     // Exchange code for tokens
     const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
@@ -117,9 +118,8 @@ export async function GET(request: NextRequest) {
       ),
     });
 
-    const integrationData = {
+    const integrationData: Record<string, unknown> = {
       accessToken: encryptedAccessToken,
-      refreshToken: encryptedRefreshToken,
       tokenExpiry,
       scopes,
       metadata: {
@@ -130,6 +130,11 @@ export async function GET(request: NextRequest) {
       updatedAt: new Date(),
     };
 
+    // Only overwrite refresh token if Google returned a new one
+    if (encryptedRefreshToken) {
+      integrationData.refreshToken = encryptedRefreshToken;
+    }
+
     if (existing) {
       // Update existing integration
       await db
@@ -137,13 +142,31 @@ export async function GET(request: NextRequest) {
         .set(integrationData)
         .where(eq(integrations.id, existing.id));
     } else {
-      // Create new integration
+      // Create new integration (always include refreshToken, even if null)
       await db.insert(integrations).values({
         userId,
         provider: "google",
+        refreshToken: encryptedRefreshToken,
         ...integrationData,
         connectedAt: new Date(),
       });
+    }
+
+    // Auto-enable Google on the agent that initiated this OAuth flow
+    if (agentId) {
+      const agent = await db.query.agents.findFirst({
+        where: and(eq(agents.id, agentId), eq(agents.userId, userId)),
+      });
+      if (agent) {
+        const currentIntegrations = (agent.integrations as Record<string, unknown>) ?? {};
+        await db
+          .update(agents)
+          .set({
+            integrations: { ...currentIntegrations, google: true },
+            updatedAt: new Date(),
+          })
+          .where(eq(agents.id, agentId));
+      }
     }
 
     // Close the popup — the chat page polls for connection status

@@ -75,11 +75,58 @@ export default function PrivacyPage() {
           <section>
             <h2 className="text-2xl font-semibold mb-4">5. Third-Party Integrations</h2>
             <p className="text-muted-foreground leading-relaxed">
-              When you connect third-party services (such as Google, Slack, or Salesforce) to More Aura, 
-              we access only the data necessary to provide the features you request. Each integration 
-              operates under its own privacy policy, and we encourage you to review those policies. 
+              When you connect third-party services (such as Google, Slack, or Salesforce) to More Aura,
+              we access only the data necessary to provide the features you request. Each integration
+              operates under its own privacy policy, and we encourage you to review those policies.
               You can disconnect integrations at any time through your account settings.
             </p>
+          </section>
+
+          <section>
+            <h2 className="text-2xl font-semibold mb-4">5a. Google API Services — Limited Use Disclosure</h2>
+            <p className="text-muted-foreground leading-relaxed mb-4">
+              When you connect your Google account, More Aura requests access to the following Google
+              API scopes:
+            </p>
+            <ul className="list-disc pl-6 space-y-2 text-muted-foreground">
+              <li><strong>Gmail (read &amp; send):</strong> To read, summarize, and draft email responses on your behalf through your AI agent.</li>
+              <li><strong>Google Calendar (read &amp; write):</strong> To view your schedule and create or modify events when you ask your AI agent to manage your calendar.</li>
+              <li><strong>Google Drive (read-only):</strong> To search and retrieve documents you reference in conversations with your AI agent.</li>
+              <li><strong>Google Docs (read-only):</strong> To read document contents when summarizing or answering questions about your files.</li>
+              <li><strong>User profile (email &amp; profile):</strong> To identify your Google account and display your name and email within the Service.</li>
+            </ul>
+            <p className="text-muted-foreground leading-relaxed mt-4">
+              More Aura&apos;s use and transfer to any other app of information received from Google APIs
+              will adhere to the{" "}
+              <a
+                href="https://developers.google.com/terms/api-services-user-data-policy"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-400 hover:text-blue-300 underline"
+              >
+                Google API Services User Data Policy
+              </a>
+              , including the Limited Use requirements.
+            </p>
+            <p className="text-muted-foreground leading-relaxed mt-4">
+              Specifically:
+            </p>
+            <ul className="list-disc pl-6 space-y-2 text-muted-foreground">
+              <li>We only use Google data to provide and improve the features you explicitly request.</li>
+              <li>We do not use Google data for advertising, selling to third parties, or training general-purpose AI models.</li>
+              <li>We do not allow humans to read your Google data except where necessary for security purposes, to comply with applicable law, or with your explicit consent.</li>
+              <li>OAuth tokens are encrypted at rest. You can revoke access at any time by disconnecting Google in your chat settings or at{" "}
+                <a
+                  href="https://myaccount.google.com/permissions"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-400 hover:text-blue-300 underline"
+                >
+                  myaccount.google.com/permissions
+                </a>
+                .
+              </li>
+            </ul>
           </section>
 
           <section>

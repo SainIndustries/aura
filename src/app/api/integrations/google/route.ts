@@ -17,7 +17,7 @@ const SCOPES = [
   "https://www.googleapis.com/auth/userinfo.profile",
 ];
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     // Check if user is authenticated
     const user = await getCurrentUser();
@@ -35,8 +35,12 @@ export async function GET() {
       );
     }
 
-    // Generate state embedding userId for CSRF protection
-    const state = await generateState(user.id);
+    // Extract optional agentId from query params (passed by chat page)
+    const url = new URL(request.url);
+    const agentId = url.searchParams.get("agentId") ?? undefined;
+
+    // Generate state embedding userId + agentId for CSRF protection
+    const state = await generateState(user.id, agentId);
 
     // Build the Google OAuth authorization URL
     const authUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");

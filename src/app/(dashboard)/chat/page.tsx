@@ -149,41 +149,26 @@ export default function ChatPage() {
     };
   }, []);
 
-  // Enable Google integration for the currently selected agent (called after OAuth completes)
-  const enableGoogleForAgent = useCallback(async () => {
-    if (!selectedAgentId) return;
-    try {
-      const res = await fetch(`/api/agents/${selectedAgentId}/integrations/google`, { method: "POST" });
-      if (res.ok) {
-        await refresh();
-      }
-    } catch {
-      // Silently fail
-    }
-  }, [selectedAgentId, refresh]);
-
   const connectGoogleForAgent = useCallback(() => {
     if (!selectedAgentId) return;
 
-    // Always open OAuth popup so user explicitly authorizes each agent
+    // Open OAuth popup with agentId — the callback will auto-enable Google on this agent
     oauthPopupRef.current = window.open(
-      "/api/integrations/google",
+      `/api/integrations/google?agentId=${selectedAgentId}`,
       "connect-google",
       "width=600,height=700,left=200,top=100"
     );
 
-    // Poll until popup closes (user completed or dismissed OAuth)
+    // Poll until popup closes, then refresh to pick up new state
     if (pollTimerRef.current) clearInterval(pollTimerRef.current);
     pollTimerRef.current = setInterval(async () => {
       if (oauthPopupRef.current?.closed) {
         clearInterval(pollTimerRef.current!);
         pollTimerRef.current = null;
-        // Refresh to pick up new tokens, then enable for this agent
         await refresh();
-        await enableGoogleForAgent();
       }
     }, 1000);
-  }, [selectedAgentId, enableGoogleForAgent, refresh]);
+  }, [selectedAgentId, refresh]);
 
   const openOAuthPopup = useCallback(
     (provider: "slack") => {

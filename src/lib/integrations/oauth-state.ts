@@ -9,12 +9,13 @@ function getHmacKey(): string {
 }
 
 /**
- * Generate an OAuth state that embeds the userId with HMAC signature.
+ * Generate an OAuth state that embeds the userId (and optional agentId) with HMAC signature.
+ * Format: nonce:userId:agentId:sig  (agentId may be empty string)
  * This avoids depending on auth cookies surviving the cross-site redirect.
  */
-export async function generateState(userId: string): Promise<string> {
+export async function generateState(userId: string, agentId?: string): Promise<string> {
   const nonce = randomBytes(16).toString("hex");
-  const payload = `${nonce}:${userId}`;
+  const payload = `${nonce}:${userId}:${agentId ?? ""}`;
   const sig = createHmac("sha256", getHmacKey()).update(payload).digest("hex");
   const state = `${payload}:${sig}`;
 
@@ -31,17 +32,19 @@ export async function generateState(userId: string): Promise<string> {
 }
 
 /**
- * Validate state and extract userId. Checks HMAC signature and cookie nonce.
- * Returns the userId if valid, null otherwise.
+ * Validate state and extract userId + optional agentId.
+ * Checks HMAC signature and cookie nonce.
+ * Returns { userId, agentId? } if valid, null otherwise.
  */
-export async function validateState(state: string): Promise<string | null> {
+export async function validateState(state: string): Promise<{ userId: string; agentId?: string } | null> {
   const parts = state.split(":");
-  if (parts.length !== 3) return null;
+  // Format: nonce:userId:agentId:sig (agentId may be empty)
+  if (parts.length !== 4) return null;
 
-  const [nonce, userId, sig] = parts;
+  const [nonce, userId, agentId, sig] = parts;
 
   // Verify HMAC signature
-  const payload = `${nonce}:${userId}`;
+  const payload = `${nonce}:${userId}:${agentId}`;
   const expectedSig = createHmac("sha256", getHmacKey()).update(payload).digest("hex");
   if (sig !== expectedSig) return null;
 
@@ -53,5 +56,5 @@ export async function validateState(state: string): Promise<string | null> {
   // If cookie is present, it must match
   if (storedNonce && storedNonce !== nonce) return null;
 
-  return userId;
+  return { userId, agentId: agentId || undefined };
 }
