@@ -40,7 +40,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogoMark, LogoWordmark } from "@/components/marketing/logo";
+import { LogoWordmark } from "@/components/marketing/logo";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -52,7 +52,7 @@ const CAL_LINK =
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/chat", label: "Chat with Aura", icon: Sparkles, highlight: true, requiresAgent: true },
+  { href: "/chat", label: "Chat", icon: Sparkles, highlight: true, requiresAgent: true },
   { href: "/agents", label: "Agents", icon: Bot },
   { href: "/templates", label: "Templates", icon: LayoutTemplate },
   { href: "/channels", label: "Channels", icon: MessageSquare },
@@ -74,7 +74,6 @@ export function AppSidebar() {
     <Sidebar>
       <SidebarHeader className="p-4">
         <Link href="/dashboard" className="flex items-center gap-3 no-underline">
-          <LogoMark />
           <LogoWordmark />
         </Link>
       </SidebarHeader>

@@ -34,7 +34,6 @@ export function LogoWordmark() {
 export function Logo({ href = "/" }: { href?: string }) {
   return (
     <Link href={href} className="flex items-center gap-[14px] no-underline">
-      <LogoMark />
       <LogoWordmark />
     </Link>
   );
