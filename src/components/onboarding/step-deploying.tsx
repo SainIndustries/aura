@@ -60,7 +60,8 @@ export function StepDeploying({ agentId }: { agentId: string }) {
         if (res.ok) {
           setSteps(data.steps);
         } else if (data.error?.includes("already has an active")) {
-          setState("running");
+          // Instance exists — check its actual status
+          await fetchStatus();
         } else {
           setState("failed");
           setError(data.error || "Failed to start deployment");

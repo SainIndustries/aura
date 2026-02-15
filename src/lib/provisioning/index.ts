@@ -41,9 +41,9 @@ export function getProvisioningSteps(
   const steps: ProvisioningStep[] = [
     { id: "queued", label: "Queued", status: "pending" },
     { id: "creating", label: "Creating Server", status: "pending" },
-    { id: "installing", label: "Installing Dependencies", status: "pending" },
+    { id: "installing", label: "Installing Software", status: "pending" },
     { id: "configuring", label: "Configuring Agent", status: "pending" },
-    { id: "running", label: "Running", status: "pending" },
+    { id: "health", label: "Health Check", status: "pending" },
   ];
 
   // Map workflow step identifiers to UI step indices (active step)
@@ -242,6 +242,7 @@ export async function updateInstanceStatus(
     serverIp: string;
     tailscaleIp: string;
     error: string;
+    currentStep: string;
     startedAt: Date;
     stoppedAt: Date;
   }>

@@ -337,6 +337,53 @@ async function waitForServerRunning(
   throw new Error(`Server ${serverId} did not reach 'running' status within ${timeoutMs / 1000}s`);
 }
 
+/**
+ * Wait for the OpenClaw gateway to respond on the server.
+ * Cloud-init installs Node.js, OpenClaw, and Caddy — this polls until the
+ * gateway is actually reachable, not just until the VM boots.
+ */
+async function waitForGateway(
+  serverIp: string,
+  timeoutMs: number = 300_000 // 5 minutes — cloud-init can take a while
+): Promise<void> {
+  const start = Date.now();
+  const pollIntervalMs = 5_000;
+
+  console.log(`[Hetzner] Waiting for gateway at ${serverIp}:80 ...`);
+
+  while (Date.now() - start < timeoutMs) {
+    try {
+      const res = await fetch(`http://${serverIp}:80/`, {
+        signal: AbortSignal.timeout(4_000),
+      });
+      // Any HTTP response means Caddy + OpenClaw are up
+      console.log(`[Hetzner] Gateway responded with status ${res.status}`);
+      return;
+    } catch {
+      // Connection refused or timeout — cloud-init still running
+    }
+    await new Promise((r) => setTimeout(r, pollIntervalMs));
+  }
+
+  throw new Error(`Gateway at ${serverIp} did not become reachable within ${timeoutMs / 1000}s`);
+}
+
+/**
+ * Parse Hetzner API errors into user-friendly messages
+ */
+function friendlyHetznerError(message: string): string {
+  if (message.includes("resource_limit_exceeded") || message.includes("server limit reached")) {
+    return "Server limit reached on hosting provider. Please delete unused agents or contact support.";
+  }
+  if (message.includes("uniqueness_error")) {
+    return "A server with this name already exists. Please try again.";
+  }
+  if (message.includes("rate_limit_exceeded")) {
+    return "Too many requests. Please wait a moment and try again.";
+  }
+  return message;
+}
+
 // ---------------------------------------------------------------------------
 // Public API — drop-in replacements for simulator functions
 // ---------------------------------------------------------------------------
@@ -423,12 +470,18 @@ export async function provisionServer(instanceId: string): Promise<void> {
       .where(eq(agents.id, agent.id));
 
     // Wait for server to boot
+    await updateInstanceStatus(instanceId, { currentStep: "vm_created" });
     await waitForServerRunning(serverId);
 
-    console.log(`[Hetzner] Server ${serverId} is running. Cloud-init will complete in background.`);
+    console.log(`[Hetzner] Server ${serverId} is running. Waiting for cloud-init and gateway...`);
 
-    // Server is running — cloud-init is still executing but the VM is live.
-    // Mark as running. The agent gateway will come online as cloud-init finishes.
+    // Wait for cloud-init to finish and OpenClaw gateway to respond
+    await updateInstanceStatus(instanceId, { currentStep: "ansible_started" });
+    await waitForGateway(serverIp);
+
+    await updateInstanceStatus(instanceId, { currentStep: "ansible_complete" });
+
+    // Gateway is actually reachable — mark as running
     await updateInstanceStatus(instanceId, {
       status: "running",
       startedAt: new Date(),
@@ -441,7 +494,7 @@ export async function provisionServer(instanceId: string): Promise<void> {
 
     await updateInstanceStatus(instanceId, {
       status: "failed",
-      error: message,
+      error: friendlyHetznerError(message),
     });
   }
 }
