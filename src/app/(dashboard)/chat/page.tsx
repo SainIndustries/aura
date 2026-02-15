@@ -70,7 +70,13 @@ type Message = {
 
 export default function ChatPage() {
   const { user } = usePrivy();
-  const { hasRunningAgent } = useAgentStatus();
+  const { hasRunningAgent, refresh } = useAgentStatus();
+  const [statusChecked, setStatusChecked] = useState(false);
+
+  // Re-check agent status on mount (provider may have stale data from before provisioning)
+  useEffect(() => {
+    refresh().then(() => setStatusChecked(true));
+  }, [refresh]);
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "welcome",
@@ -163,8 +169,8 @@ export default function ChatPage() {
     [checkIntegrations]
   );
 
-  // Gate: loading
-  if (hasRunningAgent === null) {
+  // Gate: loading (initial fetch or re-check in progress)
+  if (hasRunningAgent === null || !statusChecked) {
     return (
       <div className="flex items-center justify-center h-[calc(100vh-2rem)]">
         <Loader2 className="h-8 w-8 animate-spin text-aura-accent" />
