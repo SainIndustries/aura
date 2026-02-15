@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { db } from "@/lib/db";
 import { agents, integrations } from "@/lib/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 
 export async function GET() {
   try {
@@ -22,22 +22,19 @@ export async function GET() {
     // Check if user has a running OpenClaw instance
     const userAgents = await db.query.agents.findMany({
       where: eq(agents.userId, user.id),
+      orderBy: [desc(agents.updatedAt)],
       with: { instances: true },
     });
 
-    let hasRunningInstance = false;
-    let runningAgentName: string | null = null;
-
-    for (const agent of userAgents) {
-      const isRunning = (agent.instances ?? []).some(
+    const agentsList = userAgents.map((agent) => ({
+      id: agent.id,
+      name: agent.name,
+      running: (agent.instances ?? []).some(
         (inst) => inst.status === "running"
-      );
-      if (isRunning) {
-        hasRunningInstance = true;
-        runningAgentName = agent.name;
-        break;
-      }
-    }
+      ),
+    }));
+
+    const firstRunning = agentsList.find((a) => a.running);
 
     return NextResponse.json({
       google: {
@@ -45,9 +42,10 @@ export async function GET() {
         email: (googleIntegration?.metadata as { email?: string })?.email,
       },
       openclaw: {
-        running: hasRunningInstance,
-        ...(runningAgentName ? { agentName: runningAgentName } : {}),
+        running: !!firstRunning,
+        ...(firstRunning ? { agentName: firstRunning.name } : {}),
       },
+      agents: agentsList,
     });
   } catch (error) {
     console.error("Error fetching integration status:", error);

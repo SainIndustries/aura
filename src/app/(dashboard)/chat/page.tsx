@@ -16,6 +16,13 @@ import {
   Rocket,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { useAgentStatus } from "@/components/providers/agent-status-provider";
 
@@ -70,23 +77,35 @@ type Message = {
 
 export default function ChatPage() {
   const { user } = usePrivy();
-  const { hasRunningAgent, agentName, refresh } = useAgentStatus();
+  const { hasRunningAgent, agentName, agents, selectedAgentId, setSelectedAgentId, refresh } = useAgentStatus();
   const [statusChecked, setStatusChecked] = useState(false);
 
   // Re-check agent status on mount (provider may have stale data from before provisioning)
   useEffect(() => {
     refresh().then(() => setStatusChecked(true));
   }, [refresh]);
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: "welcome",
-      role: "assistant",
-      content: `Hey! I'm ${agentName ?? "your AI assistant"}. How can I help you today? You can type or use voice to talk to me.`,
-      timestamp: new Date(),
-    },
-  ]);
+  const [messages, setMessages] = useState<Message[]>([]);
+
+  // Initialize / update welcome message when agentName changes
+  useEffect(() => {
+    setMessages((prev) => {
+      const welcomeContent = `Hey! I'm ${agentName ?? "your AI assistant"}. How can I help you today? You can type or use voice to talk to me.`;
+      const existing = prev.find((m) => m.id === "welcome");
+      if (!existing) {
+        return [
+          { id: "welcome", role: "assistant" as const, content: welcomeContent, timestamp: new Date() },
+          ...prev,
+        ];
+      }
+      if (existing.content !== welcomeContent) {
+        return prev.map((m) => (m.id === "welcome" ? { ...m, content: welcomeContent } : m));
+      }
+      return prev;
+    });
+  }, [agentName]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [toolStatus, setToolStatus] = useState<string | null>(null);
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [googleConnected, setGoogleConnected] = useState<boolean | null>(null);
@@ -205,8 +224,8 @@ export default function ChatPage() {
     );
   }
 
-  // Gate: no agent deployed
-  if (hasRunningAgent === false) {
+  // Gate: no agents at all
+  if (agents.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-[calc(100vh-2rem)] max-w-md mx-auto text-center gap-6">
         <div className="w-16 h-16 rounded-full bg-aura-accent/10 flex items-center justify-center">
@@ -272,9 +291,18 @@ export default function ChatPage() {
       timestamp: new Date(),
     };
 
-    setMessages((prev) => [...prev, userMessage]);
+    const assistantId = (Date.now() + 1).toString();
+    const assistantMessage: Message = {
+      id: assistantId,
+      role: "assistant",
+      content: "",
+      timestamp: new Date(),
+    };
+
+    setMessages((prev) => [...prev, userMessage, assistantMessage]);
     setInput("");
     setIsLoading(true);
+    setToolStatus(null);
 
     try {
       const response = await fetch("/api/chat", {
@@ -285,36 +313,105 @@ export default function ChatPage() {
             role: m.role,
             content: m.content,
           })),
+          ...(selectedAgentId ? { agentId: selectedAgentId } : {}),
         }),
       });
 
-      const text = await response.text();
-      let data: { message?: string };
-      try {
-        data = text ? JSON.parse(text) : {};
-      } catch {
-        data = {};
+      // Pre-stream errors come back as JSON
+      if (!response.ok) {
+        let errorText = "Something went wrong. Please try again.";
+        try {
+          const errData = await response.json();
+          errorText = errData.error || errorText;
+        } catch { /* ignore */ }
+        setMessages((prev) =>
+          prev.map((m) => (m.id === assistantId ? { ...m, content: errorText } : m))
+        );
+        return;
       }
 
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: data.message || "I'm sorry, I couldn't process that request.",
-        timestamp: new Date(),
-      };
+      const reader = response.body?.getReader();
+      if (!reader) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantId ? { ...m, content: "Failed to read response." } : m
+          )
+        );
+        return;
+      }
 
-      setMessages((prev) => [...prev, assistantMessage]);
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let accumulated = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          const payload = line.slice(6).trim();
+
+          if (payload === "[DONE]") continue;
+
+          try {
+            const event = JSON.parse(payload);
+
+            if (event.content) {
+              accumulated += event.content;
+              const newContent = accumulated;
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantId ? { ...m, content: newContent } : m
+                )
+              );
+            }
+
+            if (event.status) {
+              setToolStatus(event.status);
+            }
+
+            if (event.error) {
+              accumulated += event.error;
+              const newContent = accumulated;
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantId ? { ...m, content: newContent } : m
+                )
+              );
+            }
+          } catch {
+            // Skip malformed SSE lines
+          }
+        }
+      }
+
+      // If no content arrived, show fallback
+      if (!accumulated) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantId
+              ? { ...m, content: "I'm sorry, I couldn't process that request." }
+              : m
+          )
+        );
+      }
     } catch (error) {
       console.error("Chat error:", error);
-      const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: "Sorry, I encountered an error. Please try again.",
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, errorMessage]);
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantId
+            ? { ...m, content: "Sorry, I encountered an error. Please try again." }
+            : m
+        )
+      );
     } finally {
       setIsLoading(false);
+      setToolStatus(null);
     }
   };
 
@@ -336,7 +433,27 @@ export default function ChatPage() {
           <Bot className="w-5 h-5 text-white" />
         </div>
         <div>
-          <h1 className="font-semibold text-aura-text-white">{agentName ?? "Agent"}</h1>
+          {agents.length >= 2 && selectedAgentId ? (
+            <Select value={selectedAgentId} onValueChange={setSelectedAgentId}>
+              <SelectTrigger className="border-none shadow-none bg-transparent px-0 h-auto text-aura-text-white font-semibold text-base gap-1">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="bg-aura-surface border-aura-border">
+                {agents.map((a) => (
+                  <SelectItem key={a.id} value={a.id} className="text-aura-text-light">
+                    <span className="flex items-center gap-2">
+                      {a.running && (
+                        <span className="w-2 h-2 rounded-full bg-aura-mint flex-shrink-0" />
+                      )}
+                      <span className={a.running ? "" : "text-aura-text-dim"}>{a.name}</span>
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <h1 className="font-semibold text-aura-text-white">{agentName ?? "Agent"}</h1>
+          )}
           <p className="text-sm text-aura-text-dim">Your AI Agent</p>
         </div>
         <div className="ml-auto flex items-center gap-2">
@@ -352,10 +469,12 @@ export default function ChatPage() {
               Slack
             </div>
           )}
-          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-aura-mint/10 text-aura-mint text-xs font-medium">
-            <span className="w-2 h-2 rounded-full bg-aura-mint animate-pulse" />
-            Agent Live
-          </div>
+          {agents.find((a) => a.id === selectedAgentId)?.running && (
+            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-aura-mint/10 text-aura-mint text-xs font-medium">
+              <span className="w-2 h-2 rounded-full bg-aura-mint animate-pulse" />
+              Agent Live
+            </div>
+          )}
         </div>
       </div>
 
@@ -418,7 +537,7 @@ export default function ChatPage() {
           </div>
         ))}
 
-        {isLoading && (
+        {isLoading && !messages[messages.length - 1]?.content && (
           <div className="flex items-start gap-3">
             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-aura-accent to-aura-purple flex items-center justify-center">
               <Sparkles className="w-4 h-4 text-white" />
@@ -426,7 +545,7 @@ export default function ChatPage() {
             <div className="bg-aura-surface border border-aura-border rounded-2xl rounded-tl-sm px-4 py-3">
               <div className="flex items-center gap-2 text-aura-text-dim">
                 <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Thinking...</span>
+                <span>{toolStatus || "Thinking..."}</span>
               </div>
             </div>
           </div>

@@ -4,7 +4,7 @@ import { checkRateLimit } from "@/lib/rate-limit";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { db } from "@/lib/db";
 import { agents, agentInstances, integrations } from "@/lib/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import { getValidAccessToken } from "@/lib/integrations/token-refresh";
 import { GOOGLE_TOOLS, executeToolCall } from "@/lib/integrations/chat-tools";
 
@@ -69,6 +69,36 @@ You have access to the user's Gmail and Google Calendar. You can:
 Use these tools proactively when the user asks about emails, scheduling, or calendar.
 When listing emails, summarize them concisely. When creating events or sending emails, confirm details with the user before executing.`;
 
+// ---------- SSE helpers ----------
+
+function sseContent(token: string): string {
+  return `data: ${JSON.stringify({ content: token })}\n\n`;
+}
+
+function sseStatus(label: string): string {
+  return `data: ${JSON.stringify({ status: label })}\n\n`;
+}
+
+function sseError(msg: string): string {
+  return `data: ${JSON.stringify({ error: msg })}\n\n`;
+}
+
+function sseDone(): string {
+  return "data: [DONE]\n\n";
+}
+
+const TOOL_STATUS_LABELS: Record<string, string> = {
+  list_emails: "Checking your emails...",
+  read_email: "Reading email...",
+  send_email: "Sending email...",
+  list_calendar_events: "Checking your calendar...",
+  create_calendar_event: "Creating calendar event...",
+};
+
+function toolStatusLabel(toolName: string): string {
+  return TOOL_STATUS_LABELS[toolName] || `Running ${toolName}...`;
+}
+
 // ---------- OpenClaw instance lookup ----------
 
 interface OpenClawInstance {
@@ -79,13 +109,17 @@ interface OpenClawInstance {
 }
 
 /**
- * Find the user's running OpenClaw instance (first running agent).
+ * Find the user's running OpenClaw instance (most recently updated agent).
  * Returns the server IP, gateway auth token, and agent identity for proxying.
  */
-async function getUserOpenClawInstance(userId: string): Promise<OpenClawInstance | null> {
-  // Find agents owned by this user
+async function getUserOpenClawInstance(userId: string, agentId?: string): Promise<OpenClawInstance | null> {
+  const whereClause = agentId
+    ? and(eq(agents.id, agentId), eq(agents.userId, userId))
+    : eq(agents.userId, userId);
+
   const userAgents = await db.query.agents.findMany({
-    where: eq(agents.userId, userId),
+    where: whereClause,
+    orderBy: [desc(agents.updatedAt)],
     with: {
       instances: true,
     },
@@ -128,19 +162,26 @@ async function getUserGoogleToken(userId: string): Promise<string | null> {
   return getValidAccessToken(integration.id, "google");
 }
 
-// ---------- Proxy to OpenClaw Gateway ----------
+// ---------- Stream from OpenClaw Gateway ----------
 
-interface ProxyOptions {
+interface StreamOptions {
   tools?: typeof GOOGLE_TOOLS;
   googleAccessToken?: string;
 }
 
-async function proxyToOpenClaw(
+type ToolCall = {
+  id: string;
+  type: string;
+  function: { name: string; arguments: string };
+};
+
+async function streamFromOpenClaw(
+  controller: ReadableStreamDefaultController,
   instance: OpenClawInstance,
   messages: { role: string; content: string }[],
-  options?: ProxyOptions
-): Promise<string> {
-  // OpenClaw exposes an OpenAI-compatible endpoint at /v1/chat/completions
+  options?: StreamOptions
+): Promise<void> {
+  const encoder = new TextEncoder();
   const url = `http://${instance.serverIp}/v1/chat/completions`;
   const basePrompt = buildSystemPrompt(instance.agentName, instance.agentPersonality);
   const systemPrompt = options?.tools ? basePrompt + GOOGLE_TOOLS_PROMPT : basePrompt;
@@ -150,224 +191,323 @@ async function proxyToOpenClaw(
     ...messages,
   ];
 
-  let lastContent = "I'm sorry, I couldn't process that request.";
-  let iterations = 0;
-
-  while (iterations < 3) {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${instance.gatewayToken}`,
-      },
-      body: JSON.stringify({
-        model: "openclaw",
-        messages: allMessages,
-        ...(options?.tools ? { tools: options.tools } : {}),
-        stream: false,
-      }),
-      signal: AbortSignal.timeout(60_000),
-    });
-
-    const text = await res.text();
-
-    if (!res.ok) {
-      throw new Error(`OpenClaw gateway error (${res.status}): ${text}`);
-    }
-
-    if (!text) {
-      throw new Error("OpenClaw gateway returned empty response");
-    }
-
-    let data: Record<string, unknown>;
-    try {
-      data = JSON.parse(text);
-    } catch {
-      throw new Error(`OpenClaw gateway returned invalid JSON: ${text.slice(0, 200)}`);
-    }
-
-    const choice = (data as { choices?: { message?: { content?: string; tool_calls?: { id: string; type: string; function: { name: string; arguments: string } }[] } }[] }).choices?.[0]?.message;
-
-    if (!choice) {
-      break;
-    }
-
-    lastContent = choice.content || lastContent;
-
-    // If no tool calls or no Google token to execute them, return the content
-    if (!choice.tool_calls?.length || !options?.googleAccessToken) {
-      return choice.content || lastContent;
-    }
-
-    // Add assistant message with tool_calls to conversation
-    allMessages.push(choice as Record<string, unknown>);
-
-    // Execute each tool call locally and feed results back
-    for (const call of choice.tool_calls) {
-      if (call.type !== "function") continue;
-      const result = await executeToolCall(
-        call.function.name,
-        JSON.parse(call.function.arguments),
-        options.googleAccessToken
-      );
-      allMessages.push({
-        role: "tool",
-        tool_call_id: call.id,
-        content: JSON.stringify(result),
-      });
-    }
-
-    iterations++;
-  }
-
-  return lastContent;
-}
-
-// ---------- Main handler ----------
-
-export async function POST(request: NextRequest) {
-  try {
-    // Rate limiting
-    const ip = request.headers.get("x-forwarded-for") || "anonymous";
-    const { success } = await checkRateLimit(`chat:${ip}`);
-
-    if (!success) {
-      return NextResponse.json(
-        { error: "Too many requests. Please slow down." },
-        { status: 429 }
-      );
-    }
-
-    const body = await request.json();
-    const { messages } = body;
-
-    if (!messages || !Array.isArray(messages)) {
-      return NextResponse.json(
-        { error: "Invalid messages format" },
-        { status: 400 }
-      );
-    }
-
-    const user = await getCurrentUser();
-
-    // ---------- Look up user's agent + Google token ----------
-    let instance: OpenClawInstance | null = null;
-    let agentName: string | undefined;
-    let agentPersonality: string | null | undefined;
-    let googleAccessToken: string | null = null;
-
-    if (user) {
-      instance = await getUserOpenClawInstance(user.id);
-      if (instance) {
-        agentName = instance.agentName;
-        agentPersonality = instance.agentPersonality;
-      }
-      googleAccessToken = await getUserGoogleToken(user.id);
-    }
-
-    const hasGoogleTools = !!googleAccessToken;
-
-    // ---------- Path 1: Proxy to user's running OpenClaw instance ----------
-    if (instance) {
-      try {
-        const response = await proxyToOpenClaw(instance, messages, {
-          tools: hasGoogleTools ? GOOGLE_TOOLS : undefined,
-          googleAccessToken: googleAccessToken ?? undefined,
-        });
-        return NextResponse.json({ message: response });
-      } catch (err) {
-        console.error("[Chat] OpenClaw proxy failed, falling through to direct LLM:", err);
-        // Fall through to direct LLM call
-      }
-    }
-
-    // ---------- Path 2: Direct LLM call (fallback when no running instance) ----------
-    const llm = getFallbackLLM();
-
-    if (!llm) {
-      const fallbackResponse = getFallbackResponse(messages);
-      return NextResponse.json({ message: fallbackResponse });
-    }
-
-    // Build system prompt from agent identity
-    const basePrompt = buildSystemPrompt(agentName, agentPersonality);
-    const systemPrompt = hasGoogleTools
-      ? basePrompt + GOOGLE_TOOLS_PROMPT
-      : basePrompt +
-        "\n\nWhen users ask you to perform actions (like send emails or schedule meetings), acknowledge the request and suggest they connect their Google account in the Integrations section to enable these features.";
-
-    const llmMessages: OpenAI.ChatCompletionMessageParam[] = [
-      { role: "system", content: systemPrompt },
-      ...messages.map((m: { role: string; content: string }) => ({
-        role: m.role as "user" | "assistant",
-        content: m.content,
-      })),
-    ];
-
-    const llmOptions: OpenAI.ChatCompletionCreateParamsNonStreaming = {
-      model: llm.model,
-      messages: llmMessages,
-      max_tokens: 1000,
-      temperature: 0.7,
-      ...(hasGoogleTools ? { tools: GOOGLE_TOOLS } : {}),
-      ...(openrouter && user ? { user: user.id } : {}),
-    };
-
-    // Initial LLM call
-    let completion = await llm.client.chat.completions.create(llmOptions);
-
-    // Tool call loop (max 3 iterations)
+  // Tool-calling loop (non-streaming)
+  if (options?.tools && options?.googleAccessToken) {
     let iterations = 0;
-    while (
-      completion.choices[0]?.message?.tool_calls?.length &&
-      iterations < 3 &&
-      googleAccessToken
-    ) {
-      const assistantMessage = completion.choices[0].message;
-      llmMessages.push(assistantMessage);
+    while (iterations < 3) {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${instance.gatewayToken}`,
+        },
+        body: JSON.stringify({
+          model: "openclaw",
+          messages: allMessages,
+          tools: options.tools,
+          stream: false,
+        }),
+        signal: AbortSignal.timeout(60_000),
+      });
 
-      for (const call of assistantMessage.tool_calls!) {
+      const text = await res.text();
+      if (!res.ok) throw new Error(`OpenClaw gateway error (${res.status}): ${text}`);
+      if (!text) throw new Error("OpenClaw gateway returned empty response");
+
+      let data: Record<string, unknown>;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        throw new Error(`OpenClaw gateway returned invalid JSON: ${text.slice(0, 200)}`);
+      }
+
+      const choice = (data as { choices?: { message?: { content?: string; tool_calls?: ToolCall[] } }[] }).choices?.[0]?.message;
+      if (!choice?.tool_calls?.length) break;
+
+      allMessages.push(choice as Record<string, unknown>);
+
+      for (const call of choice.tool_calls) {
         if (call.type !== "function") continue;
+        controller.enqueue(encoder.encode(sseStatus(toolStatusLabel(call.function.name))));
         const result = await executeToolCall(
           call.function.name,
           JSON.parse(call.function.arguments),
-          googleAccessToken
+          options.googleAccessToken!
         );
+        allMessages.push({
+          role: "tool",
+          tool_call_id: call.id,
+          content: JSON.stringify(result),
+        });
+      }
+      iterations++;
+    }
+  }
 
+  // Final streaming call (no tools so LLM can only produce text)
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${instance.gatewayToken}`,
+    },
+    body: JSON.stringify({
+      model: "openclaw",
+      messages: allMessages,
+      stream: true,
+    }),
+    signal: AbortSignal.timeout(60_000),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`OpenClaw gateway error (${res.status}): ${text}`);
+  }
+
+  if (!res.body) throw new Error("OpenClaw gateway returned no body");
+
+  // Read the SSE stream from OpenClaw and forward content deltas
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let hasContent = false;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+
+    for (const line of lines) {
+      if (!line.startsWith("data: ")) continue;
+      const payload = line.slice(6).trim();
+      if (payload === "[DONE]") continue;
+
+      try {
+        const chunk = JSON.parse(payload);
+        const delta = chunk.choices?.[0]?.delta?.content;
+        if (delta) {
+          hasContent = true;
+          controller.enqueue(encoder.encode(sseContent(delta)));
+        }
+      } catch {
+        // Skip malformed SSE lines
+      }
+    }
+  }
+
+  if (!hasContent) {
+    controller.enqueue(encoder.encode(sseContent("I'm sorry, I couldn't process that request.")));
+  }
+}
+
+// ---------- Stream from fallback LLM ----------
+
+async function streamFromFallbackLLM(
+  controller: ReadableStreamDefaultController,
+  llm: { client: OpenAI; model: string },
+  messages: { role: string; content: string }[],
+  agentName: string | undefined,
+  agentPersonality: string | null | undefined,
+  googleAccessToken: string | null,
+  userId?: string
+): Promise<void> {
+  const encoder = new TextEncoder();
+  const hasGoogleTools = !!googleAccessToken;
+
+  const basePrompt = buildSystemPrompt(agentName, agentPersonality);
+  const systemPrompt = hasGoogleTools
+    ? basePrompt + GOOGLE_TOOLS_PROMPT
+    : basePrompt +
+      "\n\nWhen users ask you to perform actions (like send emails or schedule meetings), acknowledge the request and suggest they connect their Google account in the Integrations section to enable these features.";
+
+  const llmMessages: OpenAI.ChatCompletionMessageParam[] = [
+    { role: "system", content: systemPrompt },
+    ...messages.map((m: { role: string; content: string }) => ({
+      role: m.role as "user" | "assistant",
+      content: m.content,
+    })),
+  ];
+
+  const baseOptions = {
+    model: llm.model,
+    max_tokens: 1000,
+    temperature: 0.7,
+    ...(openrouter && userId ? { user: userId } : {}),
+  };
+
+  // Tool-calling loop (non-streaming)
+  if (hasGoogleTools) {
+    let iterations = 0;
+    while (iterations < 3) {
+      const completion = await llm.client.chat.completions.create({
+        ...baseOptions,
+        messages: llmMessages,
+        tools: GOOGLE_TOOLS,
+        stream: false,
+      });
+
+      const msg = completion.choices[0]?.message;
+      if (!msg?.tool_calls?.length) break;
+
+      llmMessages.push(msg);
+
+      for (const call of msg.tool_calls) {
+        if (call.type !== "function") continue;
+        controller.enqueue(encoder.encode(sseStatus(toolStatusLabel(call.function.name))));
+        const result = await executeToolCall(
+          call.function.name,
+          JSON.parse(call.function.arguments),
+          googleAccessToken!
+        );
         llmMessages.push({
           role: "tool",
           tool_call_id: call.id,
           content: JSON.stringify(result),
         });
       }
-
-      completion = await llm.client.chat.completions.create({
-        ...llmOptions,
-        messages: llmMessages,
-      });
-
       iterations++;
     }
-
-    const response =
-      completion.choices[0]?.message?.content ||
-      "I'm sorry, I couldn't process that request.";
-
-    return NextResponse.json({
-      message: response,
-      ...(completion.usage ? { tokensUsed: completion.usage.total_tokens } : {}),
-    });
-  } catch (error) {
-    console.error("Chat error:", error);
-
-    const body = await request
-      .clone()
-      .json()
-      .catch(() => ({ messages: [] }));
-    const fallbackResponse = getFallbackResponse(body.messages || []);
-
-    return NextResponse.json({ message: fallbackResponse });
   }
+
+  // Final streaming call (no tools so LLM can only produce text)
+  const stream = await llm.client.chat.completions.create({
+    ...baseOptions,
+    messages: llmMessages,
+    stream: true,
+  });
+
+  let hasContent = false;
+  for await (const chunk of stream) {
+    const delta = chunk.choices?.[0]?.delta?.content;
+    if (delta) {
+      hasContent = true;
+      controller.enqueue(encoder.encode(sseContent(delta)));
+    }
+  }
+
+  if (!hasContent) {
+    controller.enqueue(encoder.encode(sseContent("I'm sorry, I couldn't process that request.")));
+  }
+}
+
+// ---------- Main handler ----------
+
+export async function POST(request: NextRequest) {
+  // Rate limiting
+  const ip = request.headers.get("x-forwarded-for") || "anonymous";
+  const { success } = await checkRateLimit(`chat:${ip}`);
+
+  if (!success) {
+    return NextResponse.json(
+      { error: "Too many requests. Please slow down." },
+      { status: 429 }
+    );
+  }
+
+  let body: { messages?: unknown; agentId?: string };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
+  const { messages, agentId } = body;
+  if (!messages || !Array.isArray(messages)) {
+    return NextResponse.json(
+      { error: "Invalid messages format" },
+      { status: 400 }
+    );
+  }
+
+  const user = await getCurrentUser();
+
+  // Parallel DB lookups
+  const [instance, googleAccessToken] = user
+    ? await Promise.all([getUserOpenClawInstance(user.id, agentId), getUserGoogleToken(user.id)])
+    : [null, null];
+
+  // If we have a running instance, use its identity. Otherwise look up the agent for fallback LLM.
+  let agentName = instance?.agentName;
+  let agentPersonality = instance?.agentPersonality;
+  if (!instance && agentId && user) {
+    const agentRecord = await db.query.agents.findFirst({
+      where: and(eq(agents.id, agentId), eq(agents.userId, user.id)),
+    });
+    if (agentRecord) {
+      agentName = agentRecord.name;
+      agentPersonality = agentRecord.personality;
+    }
+  }
+  const hasGoogleTools = !!googleAccessToken;
+
+  // Build SSE response stream
+  const stream = new ReadableStream({
+    async start(controller) {
+      const encoder = new TextEncoder();
+      try {
+        // Path 1: Proxy to user's running OpenClaw instance
+        if (instance) {
+          try {
+            await streamFromOpenClaw(controller, instance, messages, {
+              tools: hasGoogleTools ? GOOGLE_TOOLS : undefined,
+              googleAccessToken: googleAccessToken ?? undefined,
+            });
+            controller.enqueue(encoder.encode(sseDone()));
+            controller.close();
+            return;
+          } catch (err) {
+            console.error("[Chat] OpenClaw proxy failed, falling through to direct LLM:", err);
+            // Fall through to direct LLM call
+          }
+        }
+
+        // Path 2: Direct LLM call (fallback)
+        const llm = getFallbackLLM();
+        if (!llm) {
+          const fallback = getFallbackResponse(messages);
+          controller.enqueue(encoder.encode(sseContent(fallback)));
+          controller.enqueue(encoder.encode(sseDone()));
+          controller.close();
+          return;
+        }
+
+        await streamFromFallbackLLM(
+          controller,
+          llm,
+          messages,
+          agentName,
+          agentPersonality,
+          googleAccessToken,
+          user?.id
+        );
+
+        controller.enqueue(encoder.encode(sseDone()));
+        controller.close();
+      } catch (error) {
+        console.error("Chat stream error:", error);
+        try {
+          controller.enqueue(
+            encoder.encode(sseError("Something went wrong. Please try again."))
+          );
+          controller.enqueue(encoder.encode(sseDone()));
+          controller.close();
+        } catch {
+          // Controller may already be closed
+        }
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    },
+  });
 }
 
 // Fallback responses when AI is not available
