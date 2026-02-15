@@ -2,37 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { getCurrentUser } from "@/lib/auth/current-user";
+import { getFallbackLLM } from "@/lib/llm-client";
 import { db } from "@/lib/db";
 import { agents } from "@/lib/db/schema";
 import { eq, and, desc } from "drizzle-orm";
-
-// OpenRouter client — used when OPENROUTER_API_KEY is set
-const openrouter =
-  process.env.OPENROUTER_API_KEY
-    ? new OpenAI({
-        baseURL: "https://openrouter.ai/api/v1",
-        apiKey: process.env.OPENROUTER_API_KEY,
-        defaultHeaders: {
-          "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL ?? "https://aura.so",
-          "X-Title": "Aura",
-        },
-      })
-    : null;
-
-const openai = process.env.OPENAI_API_KEY
-  ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-  : null;
-
-// Fallback LLM for when no running OpenClaw instance exists
-function getFallbackLLM(): { client: OpenAI; model: string } | null {
-  if (openrouter) {
-    return { client: openrouter, model: "anthropic/claude-sonnet-4.5" };
-  }
-  if (openai) {
-    return { client: openai, model: "gpt-4.1-mini" };
-  }
-  return null;
-}
 
 const DEFAULT_SYSTEM_PROMPT = `You are a helpful AI assistant. You help users manage their work and life.
 
@@ -227,7 +200,7 @@ async function streamFromFallbackLLM(
     temperature: 0.7,
     messages: llmMessages,
     stream: true,
-    ...(openrouter && userId ? { user: userId } : {}),
+    ...(userId ? { user: userId } : {}),
   });
 
   let hasContent = false;
@@ -324,14 +297,20 @@ export async function POST(request: NextRequest) {
           return;
         }
 
-        await streamFromFallbackLLM(
-          controller,
-          llm,
-          messages,
-          agentName,
-          agentPersonality,
-          user?.id
-        );
+        try {
+          await streamFromFallbackLLM(
+            controller,
+            llm,
+            messages,
+            agentName,
+            agentPersonality,
+            user?.id
+          );
+        } catch (llmError) {
+          console.error("[Chat] Fallback LLM failed, using keyword fallback:", llmError);
+          const fallback = getFallbackResponse(messages);
+          controller.enqueue(encoder.encode(sseContent(fallback)));
+        }
 
         controller.enqueue(encoder.encode(sseDone()));
         controller.close();

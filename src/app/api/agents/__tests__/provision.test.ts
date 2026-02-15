@@ -27,12 +27,19 @@ vi.mock('@/lib/db', () => ({
       agents: {
         findFirst: vi.fn(),
       },
+      integrations: {
+        findFirst: vi.fn(),
+      },
     },
   },
 }))
 
 vi.mock('@/lib/auth/current-user', () => ({
   getCurrentUser: vi.fn(),
+}))
+
+vi.mock('@/lib/subscription', () => ({
+  getUserSubscription: vi.fn().mockResolvedValue({ isActive: true }),
 }))
 
 vi.mock('@/lib/provisioning', () => ({
@@ -142,7 +149,7 @@ describe('Agent Provisioning API Routes', () => {
       expect(response.status).toBe(200)
       expect(data.instance).toBeDefined()
       expect(data.steps).toBeDefined()
-      expect(queueAgentProvisioning).toHaveBeenCalledWith('agent-uuid', 'eu-central')
+      expect(queueAgentProvisioning).toHaveBeenCalledWith('agent-uuid', 'eu-central', 'user-uuid')
     })
 
     it('should use default region when not specified', async () => {
@@ -165,7 +172,7 @@ describe('Agent Provisioning API Routes', () => {
       const response = await POST(request, { params: Promise.resolve({ id: 'agent-uuid' }) })
 
       expect(response.status).toBe(200)
-      expect(queueAgentProvisioning).toHaveBeenCalledWith('agent-uuid', 'us-east')
+      expect(queueAgentProvisioning).toHaveBeenCalledWith('agent-uuid', 'us-east', 'user-uuid')
     })
 
     it('should return 400 when provisioning fails', async () => {
