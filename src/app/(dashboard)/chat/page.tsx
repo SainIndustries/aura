@@ -169,6 +169,33 @@ export default function ChatPage() {
     [checkIntegrations]
   );
 
+  // Initialize speech recognition
+  useEffect(() => {
+    if (typeof window !== "undefined" && ("SpeechRecognition" in window || "webkitSpeechRecognition" in window)) {
+      const SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognitionClass) return;
+      recognitionRef.current = new SpeechRecognitionClass();
+      recognitionRef.current.continuous = false;
+      recognitionRef.current.interimResults = true;
+
+      recognitionRef.current.onresult = (event: SpeechRecognitionEvent) => {
+        let transcript = "";
+        for (let i = 0; i < event.results.length; i++) {
+          transcript += event.results[i][0].transcript;
+        }
+        setInput(transcript);
+      };
+
+      recognitionRef.current.onend = () => {
+        setIsListening(false);
+      };
+
+      recognitionRef.current.onerror = () => {
+        setIsListening(false);
+      };
+    }
+  }, []);
+
   // Gate: loading (initial fetch or re-check in progress)
   if (hasRunningAgent === null || !statusChecked) {
     return (
@@ -202,33 +229,6 @@ export default function ChatPage() {
       </div>
     );
   }
-
-  // Initialize speech recognition
-  useEffect(() => {
-    if (typeof window !== "undefined" && ("SpeechRecognition" in window || "webkitSpeechRecognition" in window)) {
-      const SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (!SpeechRecognitionClass) return;
-      recognitionRef.current = new SpeechRecognitionClass();
-      recognitionRef.current.continuous = false;
-      recognitionRef.current.interimResults = true;
-
-      recognitionRef.current.onresult = (event: SpeechRecognitionEvent) => {
-        let transcript = "";
-        for (let i = 0; i < event.results.length; i++) {
-          transcript += event.results[i][0].transcript;
-        }
-        setInput(transcript);
-      };
-
-      recognitionRef.current.onend = () => {
-        setIsListening(false);
-      };
-
-      recognitionRef.current.onerror = () => {
-        setIsListening(false);
-      };
-    }
-  }, []);
 
   const toggleListening = () => {
     if (!recognitionRef.current) {
