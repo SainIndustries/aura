@@ -45,13 +45,14 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { useTheme } from "@/components/providers/theme-provider";
+import { useAgentStatus } from "@/components/providers/agent-status-provider";
 
 const CAL_LINK =
   "https://cal.com/shadman-hossain-k6kwji/15min?overlayCalendar=true";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/chat", label: "Chat with Aura", icon: Sparkles, highlight: true },
+  { href: "/chat", label: "Chat with Aura", icon: Sparkles, highlight: true, requiresAgent: true },
   { href: "/agents", label: "Agents", icon: Bot },
   { href: "/templates", label: "Templates", icon: LayoutTemplate },
   { href: "/channels", label: "Channels", icon: MessageSquare },
@@ -65,6 +66,7 @@ export function AppSidebar() {
   const pathname = usePathname();
   const { user, logout } = usePrivy();
   const { theme, toggleTheme } = useTheme();
+  const { hasRunningAgent } = useAgentStatus();
   const email = user?.email?.address ?? "user@aura.ai";
   const initials = email.slice(0, 2).toUpperCase();
 
@@ -83,7 +85,7 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              {navItems.map((item) => {
+              {navItems.filter((item) => !item.requiresAgent || hasRunningAgent === true).map((item) => {
                 const isActive =
                   pathname === item.href ||
                   (item.href !== "/dashboard" &&

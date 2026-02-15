@@ -33,11 +33,11 @@ export async function createAgent(formData: unknown) {
     },
   }).returning();
 
-  // If user has active subscription, go to agent page to deploy
-  // If not, route to Stripe checkout with agentId metadata
+  // If user has active subscription, skip Stripe and go straight to deploying
+  // If not, route to Stripe checkout (which redirects back to deploying on success)
   const subscription = await getUserSubscription(user.id);
   if (subscription?.isActive) {
-    redirect(`/agents/${agent.id}`);
+    redirect(`/onboarding?agentId=${agent.id}&success=true`);
   } else {
     await createCheckoutSession(agent.id);
   }

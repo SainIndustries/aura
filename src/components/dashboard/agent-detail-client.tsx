@@ -14,6 +14,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ProvisioningStatus } from "./provisioning-status";
+import { useAgentStatus } from "@/components/providers/agent-status-provider";
 
 interface AgentDetailClientProps {
   agentId: string;
@@ -28,8 +29,9 @@ function AgentDetailClientInner({
 }: AgentDetailClientProps) {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const { hasRunningAgent, refresh: refreshAgentStatus } = useAgentStatus();
   const isSuccess = searchParams.get("success") === "true";
-  
+
   const [showSuccess, setShowSuccess] = useState(isSuccess);
   const [isDeploying, setIsDeploying] = useState(false);
   const [deploymentStatus, setDeploymentStatus] = useState<string | null>(null);
@@ -112,7 +114,35 @@ function AgentDetailClientInner({
       )}
 
       {/* Provisioning Status */}
-      <ProvisioningStatus agentId={agentId} />
+      <ProvisioningStatus agentId={agentId} onRunning={refreshAgentStatus} />
+
+      {/* Start Chatting CTA */}
+      {hasRunningAgent && (
+        <Card className="border-aura-mint/30 bg-aura-mint/5">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-full bg-aura-mint/20 flex items-center justify-center">
+                <Sparkles className="w-6 h-6 text-aura-mint" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold text-aura-text-white">
+                  Your agent is live!
+                </h3>
+                <p className="text-sm text-aura-text-dim mt-1">
+                  Start a conversation with Aura now.
+                </p>
+              </div>
+              <Button asChild className="bg-aura-accent hover:bg-aura-accent-bright">
+                <Link href="/chat">
+                  <MessageSquare className="mr-2 h-4 w-4" />
+                  Start Chatting
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Connect Tools Prompt - show after deployment or when running */}
       {(deploymentStatus === "running" || !showSuccess) && (!hasIntegrations || !hasChannels) && (

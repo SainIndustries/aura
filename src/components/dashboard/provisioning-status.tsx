@@ -41,6 +41,7 @@ interface Instance {
 
 interface ProvisioningStatusProps {
   agentId: string;
+  onRunning?: () => void;
 }
 
 const statusColors: Record<string, string> = {
@@ -88,7 +89,7 @@ function StepIndicator({ step }: { step: ProvisioningStep }) {
   );
 }
 
-export function ProvisioningStatus({ agentId }: ProvisioningStatusProps) {
+export function ProvisioningStatus({ agentId, onRunning }: ProvisioningStatusProps) {
   const [instance, setInstance] = useState<Instance | null>(null);
   const [steps, setSteps] = useState<ProvisioningStep[] | null>(null);
   const [uptime, setUptime] = useState<number | null>(null);
@@ -118,6 +119,13 @@ export function ProvisioningStatus({ agentId }: ProvisioningStatusProps) {
       setLoading(false);
     }
   }, [agentId]);
+
+  // Notify parent when instance transitions to running
+  useEffect(() => {
+    if (instance?.status === "running" && onRunning) {
+      onRunning();
+    }
+  }, [instance?.status, onRunning]);
 
   useEffect(() => {
     fetchStatus();
