@@ -29,7 +29,10 @@ export type ProvisioningStep = {
 };
 
 /**
- * Get the provisioning steps based on current status and step
+ * Get the provisioning steps based on current status and step.
+ *
+ * Step identifiers from hetzner.ts:
+ *   vm_booting → installing_packages → caddy_up → verifying_chat → running
  */
 export function getProvisioningSteps(
   status: ProvisioningStatus["status"],
@@ -38,44 +41,46 @@ export function getProvisioningSteps(
   const steps: ProvisioningStep[] = [
     { id: "queued", label: "Queued", status: "pending" },
     { id: "creating", label: "Creating Server", status: "pending" },
+    { id: "booting", label: "Booting VM", status: "pending" },
     { id: "installing", label: "Installing Software", status: "pending" },
-    { id: "configuring", label: "Configuring Agent", status: "pending" },
-    { id: "health", label: "Health Check", status: "pending" },
+    { id: "starting", label: "Starting Gateway", status: "pending" },
+    { id: "verifying", label: "Verifying Chat", status: "pending" },
   ];
 
   // Map workflow step identifiers to UI step indices (active step)
   const stepToActiveIndex: Record<string, number> = {
-    vm_created: 2,          // steps 0,1 completed, step 2 active
-    network_configured: 2,  // networking is sub-step of infra setup
-    ansible_started: 3,     // steps 0,1,2 completed, step 3 active
-    ansible_complete: 4,    // steps 0,1,2,3 completed, step 4 active
+    vm_booting: 2,           // steps 0,1 completed, step 2 active
+    vm_created: 2,           // legacy compat
+    installing_packages: 3,  // steps 0,1,2 completed, step 3 active
+    ansible_started: 3,      // legacy compat
+    caddy_up: 4,             // steps 0,1,2,3 completed, step 4 active
+    verifying_chat: 5,       // steps 0,1,2,3,4 completed, step 5 active
+    ansible_complete: 5,     // legacy compat
   };
+
+  const lastIndex = steps.length - 1;
 
   // Determine active step index based on status and currentStep
   let activeIndex: number;
 
   if (status === "pending") {
-    activeIndex = 0; // Queued is active
+    activeIndex = 0;
   } else if (status === "provisioning") {
     if (currentStep && stepToActiveIndex[currentStep] !== undefined) {
-      // Use real step data
       activeIndex = stepToActiveIndex[currentStep];
     } else {
-      // Backward compatible: assume step 1 active (Creating Server)
-      activeIndex = 1;
+      activeIndex = 1; // Creating Server
     }
   } else if (status === "running" || status === "stopping" || status === "stopped") {
-    activeIndex = 5; // All steps completed (activeIndex > last step index)
+    activeIndex = lastIndex + 1; // All steps completed
   } else if (status === "failed") {
     if (currentStep && stepToActiveIndex[currentStep] !== undefined) {
-      // Mark the step where failure occurred as error
       const errorIndex = stepToActiveIndex[currentStep];
       return steps.map((step, i) => ({
         ...step,
         status: i < errorIndex ? "completed" : i === errorIndex ? "error" : "pending",
       }));
     } else {
-      // Fallback: error at step 2 (Installing Dependencies)
       return steps.map((step, i) => ({
         ...step,
         status: i < 2 ? "completed" : i === 2 ? "error" : "pending",
@@ -103,8 +108,6 @@ export async function queueAgentProvisioning(agentId: string, region: string = "
   if (!agent) {
     throw new Error("Agent not found");
   }
-
-  const effectiveUserId = userId || agent.userId;
 
   // Check if there's already an active instance
   const existingInstance = await db.query.agentInstances.findFirst({
