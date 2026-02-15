@@ -158,7 +158,11 @@ async function getUserGoogleToken(userId: string): Promise<string | null> {
     ),
   });
 
-  if (!integration) return null;
+  if (!integration) {
+    console.log(`[Chat] No Google integration found for user=${userId.slice(0, 8)}...`);
+    return null;
+  }
+  console.log(`[Chat] Found Google integration id=${integration.id}, hasAccessToken=${!!integration.accessToken}, hasRefreshToken=${!!integration.refreshToken}, expires=${integration.tokenExpiry}`);
   return getValidAccessToken(integration.id, "google");
 }
 
@@ -224,7 +228,12 @@ async function streamFromOpenClaw(
 
       const choice = (data as { choices?: { message?: { content?: string; tool_calls?: ToolCall[] } }[] }).choices?.[0]?.message;
       console.log(`[Chat] OpenClaw response: tool_calls=${choice?.tool_calls?.length ?? 0}, content=${choice?.content?.slice(0, 100) ?? "(none)"}`);
-      if (!choice?.tool_calls?.length) break;
+      if (!choice?.tool_calls?.length) {
+        if (iterations === 0) {
+          console.warn("[Chat] OpenClaw returned no tool_calls on first iteration — model may not support function calling");
+        }
+        break;
+      }
 
       allMessages.push(choice as Record<string, unknown>);
 
@@ -462,6 +471,7 @@ export async function POST(request: NextRequest) {
   }
   // Only pass Google tools if the agent has Google enabled AND user has valid OAuth tokens
   const hasGoogleTools = agentGoogleEnabled && !!googleAccessToken;
+  console.log(`[Chat] agentId=${agentId}, agentGoogleEnabled=${agentGoogleEnabled}, hasGoogleToken=${!!googleAccessToken}, hasGoogleTools=${hasGoogleTools}, hasInstance=${!!instance}`);
 
   // Build SSE response stream
   const stream = new ReadableStream({

@@ -83,6 +83,7 @@ export async function getValidAccessToken(
     });
 
     if (!integration || !integration.accessToken) {
+      console.warn(`[token-refresh] No integration or accessToken for id=${integrationId}`);
       return null;
     }
 
@@ -91,18 +92,21 @@ export async function getValidAccessToken(
       integration.tokenExpiry &&
       new Date(integration.tokenExpiry) < new Date()
     ) {
+      console.log(`[token-refresh] Token expired for ${provider} (expired ${integration.tokenExpiry}), hasRefreshToken=${!!integration.refreshToken}`);
       // Token is expired, try to refresh
       if (provider === "google" && integration.refreshToken) {
         return refreshGoogleToken(integrationId);
       }
       // For providers without refresh, return null (user needs to reconnect)
+      console.warn(`[token-refresh] Token expired and no refresh token for ${provider}`);
       return null;
     }
 
     // Token is still valid, decrypt and return
+    console.log(`[token-refresh] Token valid for ${provider}, expires ${integration.tokenExpiry}`);
     return decryptToken(integration.accessToken);
   } catch (error) {
-    console.error("Error getting valid access token:", error);
+    console.error("[token-refresh] Error getting valid access token:", error);
     return null;
   }
 }

@@ -15,6 +15,7 @@ import {
   Sparkles,
   Mail,
   Hash,
+  MessageCircle,
   Rocket,
   Plus,
 } from "lucide-react";
@@ -589,6 +590,13 @@ export default function ChatPage() {
               Connect Slack
             </button>
           )}
+          <button
+            type="button"
+            className="flex items-center gap-1.5 rounded-full border border-aura-border px-3.5 py-1.5 text-xs font-medium text-aura-text-light hover:border-aura-accent hover:text-aura-accent transition-colors whitespace-nowrap flex-shrink-0"
+          >
+            <MessageCircle className="w-3.5 h-3.5" />
+            Connect Telegram
+          </button>
           <Dialog>
             <DialogTrigger asChild>
               <button
