@@ -10,7 +10,7 @@ import { StepPersonality, type PersonalityId } from "./step-personality";
 import { StepBrain, type BrainType } from "./step-brain";
 import { StepDeploying } from "./step-deploying";
 import { createAgent } from "@/app/(dashboard)/agents/actions";
-import type { LlmProviderId } from "@/lib/integrations/llm-providers";
+import type { LlmProviderId, AuthMethodId } from "@/lib/integrations/llm-providers";
 
 const TOTAL_STEPS = 4;
 
@@ -23,6 +23,7 @@ type WizardState = {
   byokProvider: LlmProviderId | null;
   byokModel: string | null;
   byokKeyValidated: boolean;
+  byokAuthMethod: AuthMethodId;
 };
 
 type WizardAction =
@@ -33,6 +34,7 @@ type WizardAction =
   | { type: "SET_BYOK_PROVIDER"; payload: LlmProviderId }
   | { type: "SET_BYOK_MODEL"; payload: string }
   | { type: "SET_BYOK_KEY_VALIDATED"; payload: boolean }
+  | { type: "SET_BYOK_AUTH_METHOD"; payload: AuthMethodId }
   | { type: "NEXT" }
   | { type: "BACK" };
 
@@ -47,11 +49,13 @@ function reducer(state: WizardState, action: WizardAction): WizardState {
     case "SET_BRAIN_TYPE":
       return { ...state, brainType: action.payload };
     case "SET_BYOK_PROVIDER":
-      return { ...state, byokProvider: action.payload, byokModel: null, byokKeyValidated: false };
+      return { ...state, byokProvider: action.payload, byokModel: null, byokKeyValidated: false, byokAuthMethod: "api-key" };
     case "SET_BYOK_MODEL":
       return { ...state, byokModel: action.payload };
     case "SET_BYOK_KEY_VALIDATED":
       return { ...state, byokKeyValidated: action.payload };
+    case "SET_BYOK_AUTH_METHOD":
+      return { ...state, byokAuthMethod: action.payload, byokKeyValidated: false };
     case "NEXT":
       return { ...state, step: Math.min(state.step + 1, TOTAL_STEPS - 1) };
     case "BACK":
@@ -134,6 +138,7 @@ function WizardFlow() {
     byokProvider: null,
     byokModel: null,
     byokKeyValidated: false,
+    byokAuthMethod: "api-key" as AuthMethodId,
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -257,6 +262,10 @@ function WizardFlow() {
               byokKeyValidated={state.byokKeyValidated}
               onByokKeyValidated={(v) =>
                 dispatch({ type: "SET_BYOK_KEY_VALIDATED", payload: v })
+              }
+              byokAuthMethod={state.byokAuthMethod}
+              onByokAuthMethodChange={(v) =>
+                dispatch({ type: "SET_BYOK_AUTH_METHOD", payload: v })
               }
             />
           )}

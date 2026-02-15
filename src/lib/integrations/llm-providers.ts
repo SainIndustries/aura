@@ -6,6 +6,24 @@
 export const LLM_PROVIDER_IDS = ["openai", "anthropic", "google", "xai", "groq"] as const;
 export type LlmProviderId = (typeof LLM_PROVIDER_IDS)[number];
 
+// ---------------------------------------------------------------------------
+// Auth method definitions — how a user can authenticate with a provider
+// ---------------------------------------------------------------------------
+
+export type AuthMethodId = "api-key" | "setup-token";
+
+export interface AuthMethod {
+  id: AuthMethodId;
+  label: string;
+  description: string;
+  placeholder: string;
+  docsUrl: string;
+  /** Whether we can validate the credential before saving */
+  validate: boolean;
+  /** How the credential gets onto the VM */
+  provisioningMode: "env-var" | "paste-token";
+}
+
 export interface LlmProviderDef {
   id: LlmProviderId;
   name: string;
@@ -21,6 +39,21 @@ export interface LlmProviderDef {
   docsUrl: string;
   icon: string;
   models: { id: string; name: string; description: string }[];
+  /** Supported auth methods — first entry is the default */
+  authMethods: AuthMethod[];
+}
+
+/** Helper to build the standard API key auth method for a provider */
+function apiKeyMethod(providerName: string, docsUrl: string): AuthMethod {
+  return {
+    id: "api-key",
+    label: "API Key",
+    description: `Use a ${providerName} API key`,
+    placeholder: `Paste your ${providerName} API key`,
+    docsUrl,
+    validate: true,
+    provisioningMode: "env-var",
+  };
 }
 
 export const LLM_PROVIDERS: Record<LlmProviderId, LlmProviderDef> = {
@@ -43,6 +76,7 @@ export const LLM_PROVIDERS: Record<LlmProviderId, LlmProviderDef> = {
       { id: "o3", name: "o3", description: "Advanced reasoning model" },
       { id: "o4-mini", name: "o4-mini", description: "Fast reasoning model" },
     ],
+    authMethods: [apiKeyMethod("OpenAI", "https://platform.openai.com/api-keys")],
   },
   anthropic: {
     id: "anthropic",
@@ -64,6 +98,18 @@ export const LLM_PROVIDERS: Record<LlmProviderId, LlmProviderDef> = {
       { id: "claude-sonnet-4.5", name: "Claude Sonnet 4.5", description: "Excellent balance of speed and quality" },
       { id: "claude-haiku-4.5", name: "Claude Haiku 4.5", description: "Fast and efficient" },
     ],
+    authMethods: [
+      apiKeyMethod("Anthropic", "https://console.anthropic.com/settings/keys"),
+      {
+        id: "setup-token",
+        label: "Setup Token",
+        description: "Use your existing Claude subscription",
+        placeholder: "Paste your setup token from `claude setup-token`...",
+        docsUrl: "https://docs.anthropic.com/en/docs/claude-code/setup-token",
+        validate: false,
+        provisioningMode: "paste-token",
+      },
+    ],
   },
   google: {
     id: "google",
@@ -82,6 +128,7 @@ export const LLM_PROVIDERS: Record<LlmProviderId, LlmProviderDef> = {
       { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash", description: "Fast and cost-effective" },
       { id: "gemini-2.0-flash", name: "Gemini 2.0 Flash", description: "Lightweight, low latency" },
     ],
+    authMethods: [apiKeyMethod("Google", "https://aistudio.google.com/apikey")],
   },
   xai: {
     id: "xai",
@@ -99,6 +146,7 @@ export const LLM_PROVIDERS: Record<LlmProviderId, LlmProviderDef> = {
       { id: "grok-3", name: "Grok 3", description: "Most capable xAI model" },
       { id: "grok-3-mini", name: "Grok 3 Mini", description: "Fast reasoning model" },
     ],
+    authMethods: [apiKeyMethod("xAI", "https://console.x.ai")],
   },
   groq: {
     id: "groq",
@@ -117,6 +165,7 @@ export const LLM_PROVIDERS: Record<LlmProviderId, LlmProviderDef> = {
       { id: "llama-3.3-70b-versatile", name: "Llama 3.3 70B", description: "Open source, versatile" },
       { id: "deepseek-r1-distill-llama-70b", name: "DeepSeek R1 70B", description: "Strong reasoning, open source" },
     ],
+    authMethods: [apiKeyMethod("Groq", "https://console.groq.com/keys")],
   },
 };
 

@@ -7,6 +7,7 @@ import {
   LLM_PROVIDERS,
   LLM_PROVIDER_IDS,
   type LlmProviderId,
+  type AuthMethodId,
 } from "@/lib/integrations/llm-providers";
 
 export type BrainType = "managed" | "byob";
@@ -35,6 +36,8 @@ export function StepBrain({
   onByokModelChange,
   byokKeyValidated,
   onByokKeyValidated,
+  byokAuthMethod,
+  onByokAuthMethodChange,
 }: {
   value: BrainType;
   onChange: (id: BrainType) => void;
@@ -44,6 +47,8 @@ export function StepBrain({
   onByokModelChange: (model: string) => void;
   byokKeyValidated: boolean;
   onByokKeyValidated: (validated: boolean) => void;
+  byokAuthMethod: AuthMethodId;
+  onByokAuthMethodChange: (method: AuthMethodId) => void;
 }) {
   const [apiKey, setApiKey] = useState("");
   const [showKey, setShowKey] = useState(false);
@@ -51,6 +56,9 @@ export function StepBrain({
   const [error, setError] = useState<string | null>(null);
 
   const selectedProviderDef = byokProvider ? LLM_PROVIDERS[byokProvider] : null;
+  const activeAuthMethod = selectedProviderDef?.authMethods.find(
+    (m) => m.id === byokAuthMethod
+  ) ?? selectedProviderDef?.authMethods[0] ?? null;
 
   const handleProviderChange = (id: LlmProviderId) => {
     onByokProviderChange(id);
@@ -66,7 +74,7 @@ export function StepBrain({
       const res = await fetch("/api/integrations/llm-keys", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider: byokProvider, apiKey: apiKey.trim() }),
+        body: JSON.stringify({ provider: byokProvider, apiKey: apiKey.trim(), authMethod: byokAuthMethod }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -191,10 +199,41 @@ export function StepBrain({
                         </select>
                       </div>
 
+                      {/* Auth method toggle */}
+                      {selectedProviderDef.authMethods.length > 1 && (
+                        <div>
+                          <label className="block text-xs text-aura-text-dim mb-1">
+                            Authentication
+                          </label>
+                          <div className="flex rounded-lg border border-aura-border overflow-hidden">
+                            {selectedProviderDef.authMethods.map((method) => (
+                              <button
+                                key={method.id}
+                                type="button"
+                                onClick={() => onByokAuthMethodChange(method.id)}
+                                className={cn(
+                                  "flex-1 px-3 py-2 text-sm font-medium transition-all",
+                                  byokAuthMethod === method.id
+                                    ? "bg-aura-accent/20 text-aura-accent"
+                                    : "bg-aura-surface text-aura-text-dim hover:text-aura-text-light"
+                                )}
+                              >
+                                {method.label}
+                              </button>
+                            ))}
+                          </div>
+                          {activeAuthMethod && (
+                            <p className="text-xs text-aura-text-ghost mt-1">
+                              {activeAuthMethod.description}
+                            </p>
+                          )}
+                        </div>
+                      )}
+
                       {/* API key input */}
                       <div>
                         <label className="block text-xs text-aura-text-dim mb-1">
-                          API Key
+                          {activeAuthMethod?.label ?? "API Key"}
                         </label>
                         <div className="relative">
                           <input
@@ -205,7 +244,7 @@ export function StepBrain({
                               if (byokKeyValidated) onByokKeyValidated(false);
                               setError(null);
                             }}
-                            placeholder={`Paste your ${selectedProviderDef.name} API key`}
+                            placeholder={activeAuthMethod?.placeholder ?? `Paste your ${selectedProviderDef.name} API key`}
                             className="w-full rounded-lg border border-aura-border bg-aura-surface text-aura-text-white text-sm px-3 py-2 pr-10 focus:outline-none focus:ring-1 focus:ring-aura-accent focus:border-aura-accent"
                           />
                           <button
@@ -237,7 +276,7 @@ export function StepBrain({
                         {validating ? (
                           <>
                             <Loader2 className="w-4 h-4 animate-spin" />
-                            Validating...
+                            {activeAuthMethod?.validate === false ? "Saving..." : "Validating..."}
                           </>
                         ) : byokKeyValidated ? (
                           <>
@@ -245,7 +284,7 @@ export function StepBrain({
                             Connected
                           </>
                         ) : (
-                          "Validate Key"
+                          activeAuthMethod?.validate === false ? "Save Token" : "Validate Key"
                         )}
                       </button>
 
@@ -256,12 +295,14 @@ export function StepBrain({
 
                       {/* Docs link */}
                       <a
-                        href={selectedProviderDef.docsUrl}
+                        href={activeAuthMethod?.docsUrl ?? selectedProviderDef.docsUrl}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-1 text-xs text-aura-accent hover:text-aura-accent-bright transition-colors"
                       >
-                        Get your {selectedProviderDef.name} API key
+                        {activeAuthMethod?.validate === false
+                          ? `Get your ${selectedProviderDef.name} setup token`
+                          : `Get your ${selectedProviderDef.name} API key`}
                         <ExternalLink className="w-3 h-3" />
                       </a>
                     </div>
