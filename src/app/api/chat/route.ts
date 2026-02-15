@@ -36,23 +36,27 @@ function getFallbackLLM(): { client: OpenAI; model: string } | null {
   return null;
 }
 
-const SYSTEM_PROMPT = `You are Aura, an AI executive assistant built by SAIN Industries. You help users manage their work and life by:
+const DEFAULT_SYSTEM_PROMPT = `You are a helpful AI assistant. You help users manage their work and life.
 
-- Managing emails: Summarizing, drafting, and organizing
-- Calendar & Scheduling: Booking meetings, checking availability
-- CRM: Updating contacts, deals, and pipeline
-- Task Management: Creating reminders, tracking todos
-- Research: Finding information, summarizing content
-- Communications: Drafting messages for Slack, Teams, etc.
+Keep responses concise but helpful. You're chatting in real-time, so don't write essays.
+Format responses with markdown when helpful (bold, lists, etc.)`;
 
-Personality:
-- Be helpful, concise, and professional
-- Use a friendly but efficient tone
-- Ask clarifying questions when needed
-- Offer proactive suggestions
-- Format responses with markdown when helpful (bold, lists, etc.)
+/**
+ * Build a system prompt from the agent's configured name and personality.
+ * Falls back to a generic prompt if no agent is found.
+ */
+function buildSystemPrompt(agentName?: string, agentPersonality?: string | null): string {
+  if (!agentName) return DEFAULT_SYSTEM_PROMPT;
 
-Keep responses concise but helpful. You're chatting in real-time, so don't write essays.`;
+  const personality = agentPersonality
+    ? `\n\n${agentPersonality}`
+    : "\n\nBe helpful, concise, and friendly. Ask clarifying questions when needed.";
+
+  return `Your name is ${agentName}.${personality}
+
+Keep responses concise but helpful. You're chatting in real-time, so don't write essays.
+Format responses with markdown when helpful (bold, lists, etc.)`;
+}
 
 const GOOGLE_TOOLS_PROMPT = `
 
@@ -70,11 +74,13 @@ When listing emails, summarize them concisely. When creating events or sending e
 interface OpenClawInstance {
   serverIp: string;
   gatewayToken: string;
+  agentName: string;
+  agentPersonality: string | null;
 }
 
 /**
  * Find the user's running OpenClaw instance (first running agent).
- * Returns the server IP and gateway auth token for proxying.
+ * Returns the server IP, gateway auth token, and agent identity for proxying.
  */
 async function getUserOpenClawInstance(userId: string): Promise<OpenClawInstance | null> {
   // Find agents owned by this user
@@ -98,6 +104,8 @@ async function getUserOpenClawInstance(userId: string): Promise<OpenClawInstance
         return {
           serverIp: runningInstance.serverIp,
           gatewayToken,
+          agentName: agent.name,
+          agentPersonality: agent.personality,
         };
       }
     }
@@ -122,51 +130,97 @@ async function getUserGoogleToken(userId: string): Promise<string | null> {
 
 // ---------- Proxy to OpenClaw Gateway ----------
 
+interface ProxyOptions {
+  tools?: typeof GOOGLE_TOOLS;
+  googleAccessToken?: string;
+}
+
 async function proxyToOpenClaw(
   instance: OpenClawInstance,
-  messages: { role: string; content: string }[]
+  messages: { role: string; content: string }[],
+  options?: ProxyOptions
 ): Promise<string> {
   // OpenClaw exposes an OpenAI-compatible endpoint at /v1/chat/completions
   const url = `http://${instance.serverIp}/v1/chat/completions`;
+  const basePrompt = buildSystemPrompt(instance.agentName, instance.agentPersonality);
+  const systemPrompt = options?.tools ? basePrompt + GOOGLE_TOOLS_PROMPT : basePrompt;
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${instance.gatewayToken}`,
-    },
-    body: JSON.stringify({
-      model: "openclaw",
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        ...messages,
-      ],
-      stream: false,
-    }),
-    signal: AbortSignal.timeout(60_000), // 60s timeout for tool-heavy requests
-  });
+  const allMessages: Record<string, unknown>[] = [
+    { role: "system", content: systemPrompt },
+    ...messages,
+  ];
 
-  const text = await res.text();
+  let lastContent = "I'm sorry, I couldn't process that request.";
+  let iterations = 0;
 
-  if (!res.ok) {
-    throw new Error(`OpenClaw gateway error (${res.status}): ${text}`);
+  while (iterations < 3) {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${instance.gatewayToken}`,
+      },
+      body: JSON.stringify({
+        model: "openclaw",
+        messages: allMessages,
+        ...(options?.tools ? { tools: options.tools } : {}),
+        stream: false,
+      }),
+      signal: AbortSignal.timeout(60_000),
+    });
+
+    const text = await res.text();
+
+    if (!res.ok) {
+      throw new Error(`OpenClaw gateway error (${res.status}): ${text}`);
+    }
+
+    if (!text) {
+      throw new Error("OpenClaw gateway returned empty response");
+    }
+
+    let data: Record<string, unknown>;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      throw new Error(`OpenClaw gateway returned invalid JSON: ${text.slice(0, 200)}`);
+    }
+
+    const choice = (data as { choices?: { message?: { content?: string; tool_calls?: { id: string; type: string; function: { name: string; arguments: string } }[] } }[] }).choices?.[0]?.message;
+
+    if (!choice) {
+      break;
+    }
+
+    lastContent = choice.content || lastContent;
+
+    // If no tool calls or no Google token to execute them, return the content
+    if (!choice.tool_calls?.length || !options?.googleAccessToken) {
+      return choice.content || lastContent;
+    }
+
+    // Add assistant message with tool_calls to conversation
+    allMessages.push(choice as Record<string, unknown>);
+
+    // Execute each tool call locally and feed results back
+    for (const call of choice.tool_calls) {
+      if (call.type !== "function") continue;
+      const result = await executeToolCall(
+        call.function.name,
+        JSON.parse(call.function.arguments),
+        options.googleAccessToken
+      );
+      allMessages.push({
+        role: "tool",
+        tool_call_id: call.id,
+        content: JSON.stringify(result),
+      });
+    }
+
+    iterations++;
   }
 
-  if (!text) {
-    throw new Error("OpenClaw gateway returned empty response");
-  }
-
-  let data: Record<string, unknown>;
-  try {
-    data = JSON.parse(text);
-  } catch {
-    throw new Error(`OpenClaw gateway returned invalid JSON: ${text.slice(0, 200)}`);
-  }
-
-  return (
-    (data as { choices?: { message?: { content?: string } }[] }).choices?.[0]?.message?.content ||
-    "I'm sorry, I couldn't process that request."
-  );
+  return lastContent;
 }
 
 // ---------- Main handler ----------
@@ -196,18 +250,34 @@ export async function POST(request: NextRequest) {
 
     const user = await getCurrentUser();
 
-    // ---------- Path 1: Proxy to user's running OpenClaw instance ----------
-    if (user) {
-      const instance = await getUserOpenClawInstance(user.id);
+    // ---------- Look up user's agent + Google token ----------
+    let instance: OpenClawInstance | null = null;
+    let agentName: string | undefined;
+    let agentPersonality: string | null | undefined;
+    let googleAccessToken: string | null = null;
 
+    if (user) {
+      instance = await getUserOpenClawInstance(user.id);
       if (instance) {
-        try {
-          const response = await proxyToOpenClaw(instance, messages);
-          return NextResponse.json({ message: response });
-        } catch (err) {
-          console.error("[Chat] OpenClaw proxy failed, falling through to direct LLM:", err);
-          // Fall through to direct LLM call
-        }
+        agentName = instance.agentName;
+        agentPersonality = instance.agentPersonality;
+      }
+      googleAccessToken = await getUserGoogleToken(user.id);
+    }
+
+    const hasGoogleTools = !!googleAccessToken;
+
+    // ---------- Path 1: Proxy to user's running OpenClaw instance ----------
+    if (instance) {
+      try {
+        const response = await proxyToOpenClaw(instance, messages, {
+          tools: hasGoogleTools ? GOOGLE_TOOLS : undefined,
+          googleAccessToken: googleAccessToken ?? undefined,
+        });
+        return NextResponse.json({ message: response });
+      } catch (err) {
+        console.error("[Chat] OpenClaw proxy failed, falling through to direct LLM:", err);
+        // Fall through to direct LLM call
       }
     }
 
@@ -219,14 +289,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: fallbackResponse });
     }
 
-    // Check if user has Google connected (for fallback tool calling)
-    const googleAccessToken = user ? await getUserGoogleToken(user.id) : null;
-    const hasGoogleTools = !!googleAccessToken;
-
-    // Build system prompt
+    // Build system prompt from agent identity
+    const basePrompt = buildSystemPrompt(agentName, agentPersonality);
     const systemPrompt = hasGoogleTools
-      ? SYSTEM_PROMPT + GOOGLE_TOOLS_PROMPT
-      : SYSTEM_PROMPT +
+      ? basePrompt + GOOGLE_TOOLS_PROMPT
+      : basePrompt +
         "\n\nWhen users ask you to perform actions (like send emails or schedule meetings), acknowledge the request and suggest they connect their Google account in the Integrations section to enable these features.";
 
     const llmMessages: OpenAI.ChatCompletionMessageParam[] = [
@@ -309,7 +376,7 @@ function getFallbackResponse(
 ): string {
   const lastMessage = messages[messages.length - 1];
   if (!lastMessage) {
-    return "Hello! I'm Aura, your AI assistant. How can I help you today?";
+    return "Hello! How can I help you today?";
   }
 
   const content = lastMessage.content.toLowerCase();
@@ -319,7 +386,7 @@ function getFallbackResponse(
     content.includes("hi") ||
     content.includes("hey")
   ) {
-    return "Hello! I'm Aura, your AI assistant. I can help you manage your emails, schedule meetings, update your CRM, and automate workflows. What can I help you with today?";
+    return "Hello! I can help you manage your emails, schedule meetings, update your CRM, and automate workflows. What can I help you with today?";
   }
 
   if (content.includes("email") || content.includes("inbox")) {
@@ -343,7 +410,7 @@ function getFallbackResponse(
   }
 
   if (content.includes("help") || content.includes("what can you do")) {
-    return "I'm Aura, your AI executive assistant! Here's what I can help with:\n\n**Email** -- Summarize, draft, and organize\n**Calendar** -- Schedule meetings and manage events\n**CRM** -- Update contacts and track deals\n**Tasks** -- Create reminders and track todos\n**Research** -- Find information and summarize content\n**Communications** -- Draft messages for any platform\n\nConnect your tools in the Integrations section to unlock full capabilities!";
+    return "Here's what I can help with:\n\n**Email** -- Summarize, draft, and organize\n**Calendar** -- Schedule meetings and manage events\n**CRM** -- Update contacts and track deals\n**Tasks** -- Create reminders and track todos\n**Research** -- Find information and summarize content\n**Communications** -- Draft messages for any platform\n\nConnect your tools in the Integrations section to unlock full capabilities!";
   }
 
   if (

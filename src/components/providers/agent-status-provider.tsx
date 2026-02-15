@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useState, useCallback, useMemo } 
 
 interface AgentStatusContextType {
   hasRunningAgent: boolean | null;
+  agentName: string | null;
   refresh: () => Promise<void>;
 }
 
@@ -11,6 +12,7 @@ const AgentStatusContext = createContext<AgentStatusContextType | null>(null);
 
 export function AgentStatusProvider({ children }: { children: React.ReactNode }) {
   const [hasRunningAgent, setHasRunningAgent] = useState<boolean | null>(null);
+  const [agentName, setAgentName] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -18,6 +20,7 @@ export function AgentStatusProvider({ children }: { children: React.ReactNode })
       if (res.ok) {
         const data = await res.json();
         setHasRunningAgent(data.openclaw?.running ?? false);
+        setAgentName(data.openclaw?.agentName ?? null);
       }
     } catch {
       // Silently fail — not critical
@@ -29,8 +32,8 @@ export function AgentStatusProvider({ children }: { children: React.ReactNode })
   }, [refresh]);
 
   const value = useMemo(
-    () => ({ hasRunningAgent, refresh }),
-    [hasRunningAgent, refresh]
+    () => ({ hasRunningAgent, agentName, refresh }),
+    [hasRunningAgent, agentName, refresh]
   );
 
   return (
@@ -45,6 +48,7 @@ export function useAgentStatus() {
   if (context === null) {
     return {
       hasRunningAgent: null,
+      agentName: null,
       refresh: async () => {},
     };
   }

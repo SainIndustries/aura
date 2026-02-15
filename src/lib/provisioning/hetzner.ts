@@ -95,10 +95,10 @@ function generateCloudInit(agentConfig: AgentConfig, instanceId: string, gateway
   const provider = agentConfig.llmProvider ?? "openrouter";
   const isOpenRouter = provider === "openrouter";
 
-  // For OpenRouter, model is already in provider/model format (e.g. "anthropic/claude-sonnet-4.5")
+  // OpenClaw prefixes OpenRouter models with "openrouter/" (e.g. "openrouter/anthropic/claude-sonnet-4.5")
   // For direct providers, combine provider + model
   const model = agentConfig.llmModel ?? (isOpenRouter ? "anthropic/claude-sonnet-4.5" : "gpt-4.1-mini");
-  const openclawModel = isOpenRouter ? model : `${provider}/${model}`;
+  const openclawModel = isOpenRouter ? `openrouter/${model}` : `${provider}/${model}`;
 
   // Build the env section for openclaw.json — API keys live here
   const envKeys: Record<string, string> = {};
@@ -124,6 +124,7 @@ function generateCloudInit(agentConfig: AgentConfig, instanceId: string, gateway
   // Build OpenClaw config matching the documented schema
   const openclawConfig = {
     gateway: {
+      mode: "local" as const,
       port: 18789,
       auth: {
         mode: "token" as const,
@@ -148,86 +149,68 @@ function generateCloudInit(agentConfig: AgentConfig, instanceId: string, gateway
   // JSON.stringify handles escaping for us — no manual quote escaping needed
   const configJson = JSON.stringify(openclawConfig, null, 2);
 
+  // Indent JSON for YAML write_files content block (6 spaces to align under `content: |`)
+  const indentedConfig = configJson.split("\n").map((l) => "      " + l).join("\n");
+
   return `#cloud-config
-package_update: true
+package_update: false
 package_upgrade: false
 
-packages:
-  - ufw
-  - curl
-  - debian-keyring
-  - debian-archive-keyring
-  - apt-transport-https
+write_files:
+  - path: /root/.openclaw/openclaw.json
+    owner: root:root
+    permissions: "0600"
+    content: |
+${indentedConfig}
+
+  - path: /etc/systemd/system/openclaw-gateway.service
+    owner: root:root
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=OpenClaw Gateway
+      After=network-online.target
+      Wants=network-online.target
+
+      [Service]
+      Type=simple
+      User=root
+      Environment=HOME=/root
+      ExecStart=/usr/bin/openclaw gateway --port 18789
+      Restart=always
+      RestartSec=5
+
+      [Install]
+      WantedBy=multi-user.target
 
 runcmd:
-  # --- Firewall: only 443 (HTTPS) + 22 (SSH) ---
-  - ufw default deny incoming
-  - ufw default allow outgoing
-  - ufw allow 22/tcp
-  - ufw allow 443/tcp
-  - ufw allow 80/tcp
-  - ufw --force enable
-
-  # --- Install Node.js 22 ---
+  # --- Add ALL repos first, then one apt-get update + install ---
   - curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
-  - apt-get install -y nodejs
+  - curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+  - curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list
+  - apt-get update
+  - DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends nodejs caddy
 
   # --- Install OpenClaw ---
   - npm install -g openclaw@latest
 
-  # --- Create OpenClaw home directory ---
-  - mkdir -p /root/.openclaw
+  # --- Overwrite Caddy config AFTER apt install (avoids dpkg prompt conflict) ---
+  - cp /etc/caddy/Caddyfile /etc/caddy/Caddyfile.dist
+  - printf ':443 {\\n  reverse_proxy localhost:18789\\n  tls internal\\n}\\n:80 {\\n  reverse_proxy localhost:18789\\n}\\n' > /etc/caddy/Caddyfile
 
-  # --- Write OpenClaw config (API keys, gateway auth, model, HTTP endpoint) ---
-  - |
-    cat > /root/.openclaw/openclaw.json << 'CFGEOF'
-${configJson}
-    CFGEOF
-
-  # --- Install Caddy for reverse proxy ---
-  - curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-  - curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list
-  - apt-get update
-  - apt-get install -y caddy
-
-  # --- Configure Caddy as reverse proxy to OpenClaw Gateway ---
-  - |
-    cat > /etc/caddy/Caddyfile << 'CADDYEOF'
-    :443 {
-      reverse_proxy localhost:18789
-      tls internal
-    }
-    :80 {
-      reverse_proxy localhost:18789
-    }
-    CADDYEOF
-  - systemctl restart caddy
-
-  # --- Create systemd service for OpenClaw Gateway ---
-  - |
-    cat > /etc/systemd/system/openclaw-gateway.service << 'SVCEOF'
-    [Unit]
-    Description=OpenClaw Gateway
-    After=network-online.target
-    Wants=network-online.target
-
-    [Service]
-    Type=simple
-    User=root
-    Environment=HOME=/root
-    ExecStart=/usr/bin/openclaw gateway --port 18789
-    Restart=always
-    RestartSec=5
-
-    [Install]
-    WantedBy=multi-user.target
-    SVCEOF
+  # --- Start services (openclaw config written by write_files) ---
   - systemctl daemon-reload
   - systemctl enable openclaw-gateway
   - systemctl start openclaw-gateway
+  - systemctl restart caddy
 
-  # --- Signal that provisioning is complete ---
-  - touch /root/.openclaw/.provisioned
+  # --- Firewall: only 80/443 (HTTP/HTTPS) + 22 (SSH) ---
+  - ufw default deny incoming
+  - ufw default allow outgoing
+  - ufw allow 22/tcp
+  - ufw allow 80/tcp
+  - ufw allow 443/tcp
+  - ufw --force enable
 `;
 }
 
@@ -323,14 +306,19 @@ async function waitForServerRunning(
  * the chat completions endpoint actually works.
  * Cloud-init installs Node.js, OpenClaw, and Caddy — this polls until the
  * gateway is fully operational, not just until the VM boots.
+ *
+ * Updates the instance step granularly so the UI can show progress:
+ *   installing_packages → caddy_up → gateway_responding → verifying_chat
  */
 async function waitForGateway(
   serverIp: string,
   gatewayToken: string,
+  instanceId: string,
   timeoutMs: number = 300_000 // 5 minutes — cloud-init can take a while
 ): Promise<void> {
   const start = Date.now();
   const pollIntervalMs = 5_000;
+  let reportedCaddyUp = false;
 
   console.log(`[Hetzner] Waiting for gateway at ${serverIp}:80 ...`);
 
@@ -341,9 +329,14 @@ async function waitForGateway(
       });
       // 502 means Caddy is up but OpenClaw isn't running yet — keep waiting
       if (res.status === 502) {
-        console.log(`[Hetzner] Gateway returned 502 (OpenClaw not ready yet)`);
+        if (!reportedCaddyUp) {
+          reportedCaddyUp = true;
+          console.log(`[Hetzner] Caddy is up, waiting for OpenClaw to start...`);
+          await updateInstanceStatus(instanceId, { currentStep: "caddy_up" });
+        }
       } else {
         console.log(`[Hetzner] Gateway responded with status ${res.status}, verifying chat endpoint...`);
+        await updateInstanceStatus(instanceId, { currentStep: "verifying_chat" });
         // Gateway is up — now verify chat completions actually works
         const verified = await verifyChatEndpoint(serverIp, gatewayToken);
         if (verified) {
@@ -464,10 +457,12 @@ export async function provisionServer(instanceId: string): Promise<void> {
     // Generate cloud-init script
     const userData = generateCloudInit(agentConfig, instanceId, gatewayToken);
 
-    // Create the Hetzner server
-    console.log(`[Hetzner] Creating server in ${location} for agent "${agent.name}"`);
+    // Create the Hetzner server — include agent name for easy identification
+    const slug = agent.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
+    const serverName = `aura-${slug || "agent"}-${instanceId.slice(0, 8)}`;
+    console.log(`[Hetzner] Creating server "${serverName}" in ${location} for agent "${agent.name}"`);
     const server = await createServer({
-      name: `aura-${instanceId.slice(0, 8)}`,
+      name: serverName,
       location,
       userData,
       labels: {
@@ -499,16 +494,15 @@ export async function provisionServer(instanceId: string): Promise<void> {
       .where(eq(agents.id, agent.id));
 
     // Wait for server to boot
-    await updateInstanceStatus(instanceId, { currentStep: "vm_created" });
+    await updateInstanceStatus(instanceId, { currentStep: "vm_booting" });
     await waitForServerRunning(serverId);
 
     console.log(`[Hetzner] Server ${serverId} is running. Waiting for cloud-init and gateway...`);
 
     // Wait for cloud-init to finish and OpenClaw gateway to respond
-    await updateInstanceStatus(instanceId, { currentStep: "ansible_started" });
-    await waitForGateway(serverIp, gatewayToken);
-
-    await updateInstanceStatus(instanceId, { currentStep: "ansible_complete" });
+    // waitForGateway updates steps granularly: installing_packages → caddy_up → verifying_chat
+    await updateInstanceStatus(instanceId, { currentStep: "installing_packages" });
+    await waitForGateway(serverIp, gatewayToken, instanceId);
 
     // Gateway is actually reachable — mark as running
     await updateInstanceStatus(instanceId, {

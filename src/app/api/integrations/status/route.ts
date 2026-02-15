@@ -25,11 +25,19 @@ export async function GET() {
       with: { instances: true },
     });
 
-    const hasRunningInstance = userAgents.some((agent) =>
-      (agent.instances ?? []).some(
+    let hasRunningInstance = false;
+    let runningAgentName: string | null = null;
+
+    for (const agent of userAgents) {
+      const isRunning = (agent.instances ?? []).some(
         (inst) => inst.status === "running"
-      )
-    );
+      );
+      if (isRunning) {
+        hasRunningInstance = true;
+        runningAgentName = agent.name;
+        break;
+      }
+    }
 
     return NextResponse.json({
       google: {
@@ -38,6 +46,7 @@ export async function GET() {
       },
       openclaw: {
         running: hasRunningInstance,
+        ...(runningAgentName ? { agentName: runningAgentName } : {}),
       },
     });
   } catch (error) {

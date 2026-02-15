@@ -70,7 +70,7 @@ type Message = {
 
 export default function ChatPage() {
   const { user } = usePrivy();
-  const { hasRunningAgent, refresh } = useAgentStatus();
+  const { hasRunningAgent, agentName, refresh } = useAgentStatus();
   const [statusChecked, setStatusChecked] = useState(false);
 
   // Re-check agent status on mount (provider may have stale data from before provisioning)
@@ -81,7 +81,7 @@ export default function ChatPage() {
     {
       id: "welcome",
       role: "assistant",
-      content: "Hey! I'm Aura, your AI assistant. How can I help you today? You can type or use voice to talk to me.",
+      content: `Hey! I'm ${agentName ?? "your AI assistant"}. How can I help you today? You can type or use voice to talk to me.`,
       timestamp: new Date(),
     },
   ]);
@@ -217,7 +217,7 @@ export default function ChatPage() {
             Deploy an agent to start chatting
           </h1>
           <p className="text-aura-text-dim">
-            Create and deploy your AI agent first, then come back here to chat with Aura.
+            Create and deploy your AI agent first, then come back here to chat.
           </p>
         </div>
         <Button asChild className="bg-aura-accent hover:bg-aura-accent-bright">
@@ -336,8 +336,8 @@ export default function ChatPage() {
           <Bot className="w-5 h-5 text-white" />
         </div>
         <div>
-          <h1 className="font-semibold text-aura-text-white">Aura</h1>
-          <p className="text-sm text-aura-text-dim">Your AI Assistant</p>
+          <h1 className="font-semibold text-aura-text-white">{agentName ?? "Agent"}</h1>
+          <p className="text-sm text-aura-text-dim">Your AI Agent</p>
         </div>
         <div className="ml-auto flex items-center gap-2">
           {googleConnected && (
