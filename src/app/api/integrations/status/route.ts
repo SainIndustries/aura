@@ -26,13 +26,18 @@ export async function GET() {
       with: { instances: true },
     });
 
-    const agentsList = userAgents.map((agent) => ({
-      id: agent.id,
-      name: agent.name,
-      running: (agent.instances ?? []).some(
-        (inst) => inst.status === "running"
-      ),
-    }));
+    const agentsList = userAgents
+      .filter((agent) =>
+        agent.status === "active" ||
+        (agent.instances ?? []).some((inst) => inst.status === "running")
+      )
+      .map((agent) => ({
+        id: agent.id,
+        name: agent.name,
+        running: (agent.instances ?? []).some(
+          (inst) => inst.status === "running"
+        ),
+      }));
 
     const firstRunning = agentsList.find((a) => a.running);
 
