@@ -153,10 +153,13 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Push credentials to any running OpenClaw VMs (fire-and-forget)
-    pushGoogleCredentialsToRunningInstances(userId).catch((err) => {
+    // Push credentials to running OpenClaw VMs (awaited so the VM has
+    // tokens before the popup closes and the user tries to chat)
+    try {
+      await pushGoogleCredentialsToRunningInstances(userId);
+    } catch (err) {
       console.error("[Google OAuth callback] Failed to push credentials to VMs:", err);
-    });
+    }
 
     // Auto-enable Google on the agent that initiated this OAuth flow
     if (agentId) {

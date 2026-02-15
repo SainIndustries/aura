@@ -109,7 +109,53 @@ export default function ChatPage() {
       setSelectedAgentId(agentIdParam);
     }
   }, [searchParams, agents, setSelectedAgentId]);
-  const [messages, setMessages] = useState<Message[]>([]);
+  // --- Per-agent chat history (persisted to sessionStorage) ---
+
+  const STORAGE_KEY = "aura_chat_messages";
+
+  function loadStoredMessages(agentId: string): Message[] {
+    try {
+      const raw = sessionStorage.getItem(`${STORAGE_KEY}:${agentId}`);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw) as Message[];
+      // Rehydrate Date objects
+      return parsed.map((m) => ({ ...m, timestamp: new Date(m.timestamp) }));
+    } catch {
+      return [];
+    }
+  }
+
+  function saveStoredMessages(agentId: string, msgs: Message[]) {
+    try {
+      sessionStorage.setItem(`${STORAGE_KEY}:${agentId}`, JSON.stringify(msgs));
+    } catch { /* storage full or unavailable */ }
+  }
+
+  const [messages, setMessages] = useState<Message[]>(() =>
+    selectedAgentId ? loadStoredMessages(selectedAgentId) : []
+  );
+  const prevAgentIdRef = useRef<string | null>(selectedAgentId);
+
+  // Save/load messages when switching agents
+  useEffect(() => {
+    const prevId = prevAgentIdRef.current;
+    // Save current messages under the previous agent
+    if (prevId && prevId !== selectedAgentId) {
+      saveStoredMessages(prevId, messages);
+    }
+    // Load messages for the new agent
+    if (selectedAgentId && selectedAgentId !== prevId) {
+      setMessages(loadStoredMessages(selectedAgentId));
+    }
+    prevAgentIdRef.current = selectedAgentId;
+  }, [selectedAgentId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Persist messages on every update
+  useEffect(() => {
+    if (selectedAgentId) {
+      saveStoredMessages(selectedAgentId, messages);
+    }
+  }, [messages, selectedAgentId]);
 
   // Initialize / update welcome message when agentName changes
   useEffect(() => {
