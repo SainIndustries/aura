@@ -182,7 +182,7 @@ export function StepDeploying({ agentId }: { agentId: string }) {
               </div>
               <div className="flex justify-between text-xs text-aura-text-ghost">
                 <span>{elapsedDisplay} elapsed</span>
-                <span>~2-3 min total</span>
+                <span>~3-4 min total</span>
               </div>
             </div>
 
@@ -245,7 +245,7 @@ export function StepDeploying({ agentId }: { agentId: string }) {
             </div>
             <Link
               href="/chat"
-              className="flex items-center justify-center gap-2 rounded-full bg-white text-aura-void px-6 py-3 text-sm font-medium hover:bg-white/90 transition-all mx-auto w-fit"
+              className="flex items-center justify-center gap-2 rounded-full bg-aura-accent text-white px-6 py-3 text-sm font-medium hover:bg-aura-accent-bright transition-all mx-auto w-fit"
             >
               <MessageSquare className="w-4 h-4" />
               Start Chatting
@@ -269,7 +269,7 @@ export function StepDeploying({ agentId }: { agentId: string }) {
                   setDeployTriggered(false);
                   setError(null);
                 }}
-                className="rounded-full bg-white text-aura-void px-6 py-2.5 text-sm font-medium hover:bg-white/90 transition-all"
+                className="rounded-full bg-aura-accent text-white px-6 py-2.5 text-sm font-medium hover:bg-aura-accent-bright transition-all"
               >
                 Retry
               </button>

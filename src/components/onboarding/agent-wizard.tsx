@@ -248,7 +248,7 @@ function WizardFlow() {
             type="button"
             onClick={handleContinue}
             disabled={!canContinue(state) || isSubmitting}
-            className="rounded-full bg-white text-aura-void px-6 py-2.5 text-sm font-medium hover:bg-white/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center gap-2"
+            className="rounded-full bg-aura-accent text-white px-6 py-2.5 text-sm font-medium hover:bg-aura-accent-bright disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center gap-2"
           >
             {isSubmitting ? (
               <>
