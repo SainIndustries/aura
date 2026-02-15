@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { usePrivy } from "@privy-io/react-auth";
 import NextLink from "next/link";
+import ReactMarkdown from "react-markdown";
 import {
   Send,
   Mic,
@@ -510,7 +511,9 @@ export default function ChatPage() {
                   : "bg-aura-surface border border-aura-border text-aura-text-light rounded-tl-sm"
               )}
             >
-              <p className="whitespace-pre-wrap">{message.content}</p>
+              <div className="whitespace-pre-wrap prose prose-invert prose-sm max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-hr:my-2">
+                <ReactMarkdown>{message.content}</ReactMarkdown>
+              </div>
               <div
                 className={cn(
                   "flex items-center gap-2 mt-2 text-xs",
