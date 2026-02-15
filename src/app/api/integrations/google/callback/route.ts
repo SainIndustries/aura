@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { validateState } from "@/lib/integrations/oauth-state";
 import { encryptToken } from "@/lib/integrations/encryption";
 import { db } from "@/lib/db";
@@ -25,37 +25,40 @@ interface GoogleUserInfo {
   picture?: string;
 }
 
+function popupHtml(type: "oauth-success" | "oauth-error", message: string): Response {
+  return new Response(
+    `<html><body><script>
+if (window.opener) {
+  window.opener.postMessage({ type: '${type}', provider: 'google' }, window.location.origin);
+}
+window.close();
+</script><p>${message}</p></body></html>`,
+    { headers: { "Content-Type": "text/html" } }
+  );
+}
+
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const code = searchParams.get("code");
   const state = searchParams.get("state");
   const error = searchParams.get("error");
 
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL;
-
   // Check for OAuth errors
   if (error) {
     console.error("Google OAuth error:", error);
-    return NextResponse.redirect(
-      `${baseUrl}/integrations?error=google_oauth_denied`
-    );
+    return popupHtml("oauth-error", "Authorization was denied. You can close this window.");
   }
 
   // Validate required parameters
   if (!code || !state) {
-    return NextResponse.redirect(
-      `${baseUrl}/integrations?error=invalid_callback`
-    );
+    return popupHtml("oauth-error", "Invalid callback parameters. You can close this window.");
   }
 
   try {
     // Validate CSRF state and extract userId + agentId
     const stateData = await validateState(state);
     if (!stateData) {
-      return new Response(
-        `<html><body><script>window.close();</script><p>Invalid state. Please try again.</p></body></html>`,
-        { headers: { "Content-Type": "text/html" } }
-      );
+      return popupHtml("oauth-error", "Invalid state. Please try again.");
     }
     const { userId, agentId } = stateData;
 
@@ -77,9 +80,7 @@ export async function GET(request: NextRequest) {
     if (!tokenResponse.ok) {
       const errorData = await tokenResponse.text();
       console.error("Failed to exchange code for tokens:", errorData);
-      return NextResponse.redirect(
-        `${baseUrl}/integrations?error=token_exchange_failed`
-      );
+      return popupHtml("oauth-error", "Failed to exchange authorization code. Please try again.");
     }
 
     const tokens: GoogleTokenResponse = await tokenResponse.json();
@@ -178,16 +179,10 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Close the popup — the chat page polls for connection status
-    return new Response(
-      `<html><body><script>window.close();</script><p>Connected! You can close this window.</p></body></html>`,
-      { headers: { "Content-Type": "text/html" } }
-    );
+    // Notify parent window and close the popup
+    return popupHtml("oauth-success", "Connected! You can close this window.");
   } catch (error) {
     console.error("Error in Google OAuth callback:", error);
-    return new Response(
-      `<html><body><script>window.close();</script><p>Something went wrong. You can close this window.</p></body></html>`,
-      { headers: { "Content-Type": "text/html" } }
-    );
+    return popupHtml("oauth-error", "Something went wrong. You can close this window.");
   }
 }

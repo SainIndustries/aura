@@ -194,15 +194,18 @@ export default function ChatPage() {
 
     const provider = getProviderById(pendingProvider);
     const content = getCapabilitiesMessage(pendingProvider, provider?.name);
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: `integration-${pendingProvider}-${Date.now()}`,
-        role: "assistant" as const,
-        content,
-        timestamp: new Date(),
-      },
-    ]);
+    setMessages((prev) => {
+      if (prev.some((m) => m.id.startsWith(`integration-${pendingProvider}-`))) return prev;
+      return [
+        ...prev,
+        {
+          id: `integration-${pendingProvider}-${Date.now()}`,
+          role: "assistant" as const,
+          content,
+          timestamp: new Date(),
+        },
+      ];
+    });
   }, [selectedAgentId]);
 
   // Inject capabilities message when a new integration is connected
@@ -210,15 +213,18 @@ export default function ChatPage() {
     if (!newlyConnectedIntegration) return;
     const provider = getProviderById(newlyConnectedIntegration);
     const content = getCapabilitiesMessage(newlyConnectedIntegration, provider?.name);
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: `integration-${newlyConnectedIntegration}-${Date.now()}`,
-        role: "assistant" as const,
-        content,
-        timestamp: new Date(),
-      },
-    ]);
+    setMessages((prev) => {
+      if (prev.some((m) => m.id.startsWith(`integration-${newlyConnectedIntegration}-`))) return prev;
+      return [
+        ...prev,
+        {
+          id: `integration-${newlyConnectedIntegration}-${Date.now()}`,
+          role: "assistant" as const,
+          content,
+          timestamp: new Date(),
+        },
+      ];
+    });
     clearNewIntegration();
   }, [newlyConnectedIntegration, clearNewIntegration]);
 
@@ -264,6 +270,32 @@ export default function ChatPage() {
   const agentGoogleEnabled = selectedAgent?.integrations.google ?? false;
   const agentSlackEnabled = selectedAgent?.integrations.slack ?? false;
   const agentElevenlabsEnabled = selectedAgent?.integrations.elevenlabs ?? false;
+
+  // Listen for OAuth postMessage from popup callback
+  useEffect(() => {
+    function handleOAuthMessage(event: MessageEvent) {
+      if (event.origin !== window.location.origin) return;
+      const { type, provider } = event.data ?? {};
+      if (type === "oauth-success" && provider === "google") {
+        oauthPopupRef.current?.close();
+        oauthPopupRef.current = null;
+        if (pollTimerRef.current) {
+          clearInterval(pollTimerRef.current);
+          pollTimerRef.current = null;
+        }
+        refresh();
+      } else if (type === "oauth-error") {
+        oauthPopupRef.current?.close();
+        oauthPopupRef.current = null;
+        if (pollTimerRef.current) {
+          clearInterval(pollTimerRef.current);
+          pollTimerRef.current = null;
+        }
+      }
+    }
+    window.addEventListener("message", handleOAuthMessage);
+    return () => window.removeEventListener("message", handleOAuthMessage);
+  }, [refresh]);
 
   // Cleanup polling on unmount
   useEffect(() => {
@@ -326,9 +358,15 @@ export default function ChatPage() {
         "width=600,height=700,left=200,top=100"
       );
 
-      // Poll for connection every 2s
+      // Poll until popup closes, then refresh to pick up new state
       if (pollTimerRef.current) clearInterval(pollTimerRef.current);
       pollTimerRef.current = setInterval(async () => {
+        if (oauthPopupRef.current?.closed) {
+          clearInterval(pollTimerRef.current!);
+          pollTimerRef.current = null;
+          await refresh();
+          return;
+        }
         await refresh();
       }, 2000);
     },

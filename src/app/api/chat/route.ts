@@ -6,6 +6,12 @@ import { getFallbackLLM } from "@/lib/llm-client";
 import { db } from "@/lib/db";
 import { agents } from "@/lib/db/schema";
 import { eq, and, desc } from "drizzle-orm";
+import {
+  getPendingNotifications,
+  markNotified,
+  buildNotificationPromptSection,
+  type PendingNotification,
+} from "@/lib/integrations/notification";
 
 const DEFAULT_SYSTEM_PROMPT = `You are a helpful AI assistant. You help users manage their work and life.
 
@@ -16,14 +22,29 @@ Format responses with markdown when helpful (bold, lists, etc.)`;
  * Build a system prompt from the agent's configured name and personality.
  * Falls back to a generic prompt if no agent is found.
  */
-function buildSystemPrompt(agentName?: string, agentPersonality?: string | null): string {
+function buildSystemPrompt(
+  agentName?: string,
+  agentPersonality?: string | null,
+  connectedIntegrations?: Record<string, unknown>,
+): string {
   if (!agentName) return DEFAULT_SYSTEM_PROMPT;
 
   const personality = agentPersonality
     ? `\n\n${agentPersonality}`
     : "\n\nBe helpful, concise, and friendly. Ask clarifying questions when needed.";
 
-  return `Your name is ${agentName}.${personality}
+  let integrationSection = "";
+  if (connectedIntegrations) {
+    const active: string[] = [];
+    if (connectedIntegrations.google) active.push("Google Workspace (Gmail, Calendar, Drive, Contacts)");
+    if (connectedIntegrations.slack) active.push("Slack");
+
+    if (active.length > 0) {
+      integrationSection = `\n\n## Connected Integrations\nYou currently have access to the following integrations:\n${active.map((i) => `- ${i}`).join("\n")}\n\nAlways attempt to use these tools when the user's request is relevant. Do not tell the user you lack access to these services — they are connected and available.`;
+    }
+  }
+
+  return `Your name is ${agentName}.${personality}${integrationSection}
 
 Keep responses concise but helpful. You're chatting in real-time, so don't write essays.
 Format responses with markdown when helpful (bold, lists, etc.)`;
@@ -50,6 +71,7 @@ interface OpenClawInstance {
   gatewayToken: string;
   agentName: string;
   agentPersonality: string | null;
+  integrations: Record<string, unknown>;
 }
 
 /**
@@ -84,6 +106,7 @@ async function getUserOpenClawInstance(userId: string, agentId?: string): Promis
           gatewayToken,
           agentName: agent.name,
           agentPersonality: agent.personality,
+          integrations: (agent.integrations as Record<string, unknown>) ?? {},
         };
       }
     }
@@ -101,10 +124,12 @@ async function streamFromOpenClaw(
   controller: ReadableStreamDefaultController,
   instance: OpenClawInstance,
   messages: { role: string; content: string }[],
+  notificationSection?: string,
 ): Promise<void> {
   const encoder = new TextEncoder();
   const url = `http://${instance.serverIp}/v1/chat/completions`;
-  const systemPrompt = buildSystemPrompt(instance.agentName, instance.agentPersonality);
+  const systemPrompt = buildSystemPrompt(instance.agentName, instance.agentPersonality, instance.integrations)
+    + (notificationSection ?? "");
 
   const allMessages: Record<string, unknown>[] = [
     { role: "system", content: systemPrompt },
@@ -178,11 +203,14 @@ async function streamFromFallbackLLM(
   messages: { role: string; content: string }[],
   agentName: string | undefined,
   agentPersonality: string | null | undefined,
-  userId?: string
+  userId?: string,
+  connectedIntegrations?: Record<string, unknown>,
+  notificationSection?: string,
 ): Promise<void> {
   const encoder = new TextEncoder();
 
-  const basePrompt = buildSystemPrompt(agentName, agentPersonality);
+  const basePrompt = buildSystemPrompt(agentName, agentPersonality, connectedIntegrations)
+    + (notificationSection ?? "");
   const systemPrompt = basePrompt +
     "\n\nWhen users ask you to perform actions (like send emails or schedule meetings), acknowledge the request and let them know their agent needs to be running to use these features. Suggest they start their agent from the dashboard.";
 
@@ -256,6 +284,7 @@ export async function POST(request: NextRequest) {
   // Look up agent identity for fallback prompt
   let agentName = instance?.agentName;
   let agentPersonality = instance?.agentPersonality;
+  let agentIntegrations: Record<string, unknown> = instance?.integrations ?? {};
   if (agentId && user && !instance) {
     const agentRecord = await db.query.agents.findFirst({
       where: and(eq(agents.id, agentId), eq(agents.userId, user.id)),
@@ -263,6 +292,24 @@ export async function POST(request: NextRequest) {
     if (agentRecord) {
       agentName = agentRecord.name;
       agentPersonality = agentRecord.personality;
+      agentIntegrations = (agentRecord.integrations as Record<string, unknown>) ?? {};
+    }
+  }
+
+  // Check for newly connected integrations the agent hasn't acknowledged yet
+  let pendingNotifications: PendingNotification[] = [];
+  let notificationSection = "";
+  if (user) {
+    try {
+      pendingNotifications = await getPendingNotifications(user.id);
+      if (pendingNotifications.length > 0) {
+        notificationSection = buildNotificationPromptSection(
+          pendingNotifications.map((n) => n.provider),
+        );
+        console.log(`[Chat] Injecting notification for: ${pendingNotifications.map((n) => n.provider).join(", ")}`);
+      }
+    } catch (err) {
+      console.error("[Chat] Failed to check pending notifications:", err);
     }
   }
 
@@ -277,7 +324,11 @@ export async function POST(request: NextRequest) {
         // OpenClaw handles Google tools natively via the google-workspace skill
         if (instance) {
           try {
-            await streamFromOpenClaw(controller, instance, messages);
+            await streamFromOpenClaw(controller, instance, messages, notificationSection);
+            // Mark notifications as delivered (fire-and-forget)
+            for (const n of pendingNotifications) {
+              markNotified(n.integrationId).catch(() => {});
+            }
             controller.enqueue(encoder.encode(sseDone()));
             controller.close();
             return;
@@ -304,8 +355,14 @@ export async function POST(request: NextRequest) {
             messages,
             agentName,
             agentPersonality,
-            user?.id
+            user?.id,
+            agentIntegrations,
+            notificationSection,
           );
+          // Mark notifications as delivered (fire-and-forget)
+          for (const n of pendingNotifications) {
+            markNotified(n.integrationId).catch(() => {});
+          }
         } catch (llmError) {
           console.error("[Chat] Fallback LLM failed, using keyword fallback:", llmError);
           const fallback = getFallbackResponse(messages);
