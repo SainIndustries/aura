@@ -119,10 +119,14 @@ function generateCloudInit(
   const isOpenRouter = provider === "openrouter";
 
   // OpenClaw model format depends on the provider:
-  // - OpenRouter: "openrouter/anthropic/claude-sonnet-4.5" (openrouter/ + provider/model)
-  // - Direct BYOK: just the model name, e.g. "claude-sonnet-4.5" (OpenClaw resolves via env var)
+  // - OpenRouter: "openrouter/anthropic/claude-sonnet-4.5" (dots in version, openrouter/ prefix)
+  // - Direct BYOK: "anthropic/claude-sonnet-4-5" (dashes in version, provider/ prefix)
+  // The UI stores model IDs with dots (e.g. "claude-sonnet-4.5") but OpenClaw's direct
+  // provider registry uses dashes (e.g. "anthropic/claude-sonnet-4-5").
   const model = agentConfig.llmModel ?? (isOpenRouter ? "anthropic/claude-sonnet-4.5" : "gpt-4.1-mini");
-  const openclawModel = isOpenRouter ? `openrouter/${model}` : model;
+  const openclawModel = isOpenRouter
+    ? `openrouter/${model}`
+    : `${provider}/${model.replace(/(\d+)\.(\d+)/g, "$1-$2")}`;
 
   // Build the env section for openclaw.json — API keys live here
   const envKeys: Record<string, string> = {};
